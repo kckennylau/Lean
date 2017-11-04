@@ -1,6 +1,6 @@
 import algebra.module
 
-def field.to_vector_space {K : Type} [field K] :
+instance field.to_vector_space {K : Type} [field K] :
 vector_space K K := ⟨ring.to_module⟩
 
 lemma eq_zero_of_add_self_eq {α : Type} [add_group α]
