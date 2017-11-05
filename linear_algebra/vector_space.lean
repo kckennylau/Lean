@@ -7,18 +7,7 @@ lemma eq_zero_of_add_self_eq {α : Type} [add_group α]
 {a : α} (H : a + a = a) : a = 0 :=
 add_left_cancel (by {rw add_zero, exact H})
 
-lemma add_four {α : Type} [add_monoid α]
-{a b c d : α} : (a + b) + (c + d) = a + (b + c) + d := by simp
-
-lemma mul_four {α : Type} [monoid α]
-{a b c d : α} : (a * b) * (c * d) = a * (b * c) * d := by simp
-
-lemma smul_smul {K V : Type} [field K] [vector_space K V]
-{a b : K} {v : V} : a • (b • v) = (a * b) • v := mul_smul.symm
-
-
-structure subspace (K : Type) (V : Type) [field K] [v : vector_space K V] :=
-    (p : V → Prop)
+class subspace (K : Type) (V : Type) [field K] [vector_space K V] (p : V → Prop) :=
     (p_zero : p 0)
     (p_add : ∀ u v, p u → p v → p (u + v))
     (p_neg : ∀ v, p v → p (-v))
@@ -26,60 +15,62 @@ structure subspace (K : Type) (V : Type) [field K] [v : vector_space K V] :=
 
 namespace subspace
 
-variables {K V : Type} [field K] [vector_space K V] (s : subspace K V)
+variables (K : Type) {V : Type} [field K] [vector_space K V]
+{p : V → Prop} [subspace K V p]
 
-variables {c d : K} (u v : {x // s.p x})
+variables {c d : K} (u v : {x // p x})
 
-def add (u v : {x // s.p x}) : {x // s.p x} :=
+include K
+
+def add (u v : {x // p x}) : {x // p x} :=
 {
     val := u.val + v.val,
-    property := s.p_add u.val v.val u.property v.property
+    property := p_add K u.val v.val u.property v.property
 }
 
-def zero : {x // s.p x} :=
+def zero : {x // p x} :=
 {
     val := 0,
-    property := s.p_zero
+    property := p_zero K p
 }
 
-def neg (v : {x // s.p x}) : {x // s.p x} :=
+def neg (v : {x // p x}) : {x // p x} :=
 {
     val := -v.val,
-    property := s.p_neg v.val v.property
+    property := p_neg K v.val v.property
 }
 
-def smul (c : K) (v : {x // s.p x}) : {x // s.p x} :=
+def smul (c : K) (v : {x // p x}) : {x // p x} :=
 {
     val := c • v.val,
-    property := s.p_smul c v.val v.property
+    property := p_smul c v.val v.property
 }
 
-instance : has_add {x // s.p x} := ⟨add s⟩
-instance : has_zero {x // s.p x} := ⟨zero s⟩
-instance : has_neg {x // s.p x} := ⟨neg s⟩
-instance : has_scalar K {x // s.p x} := ⟨smul s⟩
+instance : has_add {x // p x} := ⟨add K⟩
+instance : has_zero {x // p x} := ⟨zero K⟩
+instance : has_neg {x // p x} := ⟨neg K⟩
+instance : has_scalar K {x // p x} := ⟨smul K⟩
 
-@[simp] lemma add_simp : (add s u v).val = u.val + v.val := rfl
-@[simp] lemma zero_simp : (zero s : {x // s.p x}).val = 0 := rfl
-@[simp] lemma neg_simp : (neg s v).val = -v.val := rfl
-@[simp] lemma smul_simp : (smul s c v).val = c • v.val := rfl
+@[simp] lemma add_simp : (add K u v).val = u.val + v.val := rfl
+@[simp] lemma zero_simp : (zero K : {x // p x}).val = 0 := rfl
+@[simp] lemma neg_simp : (neg K v).val = -v.val := rfl
+@[simp] lemma smul_simp : (smul K c v).val = c • v.val := rfl
 @[simp] lemma add_simp' : (u + v).val = u.val + v.val := rfl
-@[simp] lemma zero_simp' : (0 : {x // s.p x}).val = 0 := rfl
+@[simp] lemma zero_simp' : (0 : {x // p x}).val = 0 := rfl
 @[simp] lemma neg_simp' : (-v).val = -v.val := rfl
 @[simp] lemma smul_simp' : (c • v).val = c • v.val := rfl
 
-
-instance : vector_space K {x // s.p x} :=
+instance : vector_space K {x // p x} :=
 {
-    add                 := add s,
+    add                 := add K,
     add_assoc           := (λ u v w, subtype.eq (by simp [add_assoc])),
-    zero                := zero s,
+    zero                := zero K,
     zero_add            := (λ v, subtype.eq (by simp [zero_add])),
     add_zero            := (λ v, subtype.eq (by simp [add_zero])),
-    neg                 := neg s,
+    neg                 := neg K,
     add_left_neg        := (λ v, subtype.eq (by simp [add_left_neg])),
     add_comm            := (λ u v, subtype.eq (by simp [add_comm])),
-    smul                := smul s,
+    smul                := smul K,
     smul_left_distrib   := (λ c u v, subtype.eq (by simp [smul_left_distrib])),
     smul_right_distrib  := (λ c u v, subtype.eq (by simp [smul_right_distrib])),
     mul_smul            := (λ c d v, subtype.eq (by simp [mul_smul])),
@@ -153,9 +144,8 @@ by {unfold ker at *, simp [HU,HV]}
 theorem ker_smul (c : K) (v : V) (HV : A.ker v) : A.ker (c • v) :=
 by {unfold ker at *, simp [HV]}
 
-def ker_subspace : subspace K V :=
+instance : subspace K V A.ker :=
 {
-    p := (λ x, A.ker x),
     p_add := ker_add,
     p_zero := ker_zero,
     p_neg := ker_neg,
@@ -329,6 +319,9 @@ begin
         ... = (inv * val) * inv_1   : by rw [HAB]
         ... = inv_1                 : by rw [property.2,id_comp]
 end
+
+lemma mul_four {α : Type} [monoid α]
+{a b c d : α} : (a * b) * (c * d) = a * (b * c) * d := by simp
 
 def comp (A B : invertible K V) : invertible K V :=
 {
