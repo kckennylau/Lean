@@ -18,7 +18,7 @@ class nbg (α : Type u) (β : Type v) :=
 (class_ext : ∀ X Y, (∀ z, set_mem_class z X ↔ set_mem_class z Y) → X = Y)
 (class_reg : β → α)
 (class_reg_prop : ∀ X, set_mem_class (class_reg X) X ∧ ∀ z, ¬(set_mem_class z X ∧ set_mem_set z (class_reg X)))
-(limitation : ∀ C, xor (∃ c, ∀ z, set_mem_set z c ↔ set_mem_class z C) (∃ F, ∀ y, ∃! x, set_mem_class (set_pair (set_pair x x) (set_pair x y)) F))
+(limitation : ∀ C, xor (∃ c, ∀ z, set_mem_set z c ↔ set_mem_class z C) (∃ F, (∀ y, (∃ x, set_mem_class x C ∧ set_mem_class (set_pair (set_pair x x) (set_pair x y)) F)) ∧ (∀ x y z, set_mem_class x C → set_mem_class (set_pair (set_pair x x) (set_pair x y)) F → set_mem_class (set_pair (set_pair x x) (set_pair x z)) F → y = z)))
 (set_to_class : α → β)
 (set_to_class_prop : ∀ x y, set_mem_set y x ↔ set_mem_class y (set_to_class x))
 (class_comp : β → β)
@@ -44,6 +44,18 @@ class nbg (α : Type u) (β : Type v) :=
 
 theorem classical.dne (p : Prop) : ¬¬p → p
 | hp := or.cases_on (classical.em p) id (λ h, false.elim (hp h))
+
+theorem xor.not_right_of_left {p q : Prop} : xor p q → p → ¬q
+| hpq hp := or.cases_on hpq (λ h, h.2) (λ h, false.rec ¬q $ h.2 hp)
+
+theorem xor.right_of_not_left {p q : Prop} : xor p q → ¬p → q
+| hpq hp := or.cases_on hpq (λ h, false.rec q $ hp h.1) (λ h, h.1)
+
+theorem xor.not_left_of_right {p q : Prop} : xor p q → q → ¬p
+| hpq hq := or.cases_on hpq (λ h, false.rec ¬p $ h.2 hq) (λ h, h.2)
+
+theorem xor.left_of_not_right {p q : Prop} : xor p q → ¬q → p
+| hpq hq := or.cases_on hpq (λ h, h.1) (λ h, false.rec p $ hq h.1)
 
 namespace nbg
 
@@ -270,9 +282,11 @@ theorem set_to_class_ext : set_mem_set β x y → set_mem_class x (set_to_class 
 theorem class_mem_of_to_class : set_mem_class x (set_to_class β y) → set_mem_set β x y :=
 (set_to_class_prop β y x).2
 
+variables (α β)
 def class_univ : β := class_comp α (set_to_class β (set_empty α β))
+variables {α β}
 
-theorem class_univ_prop : set_mem_class x (@class_univ α β _) :=
+theorem class_univ_prop : set_mem_class x (class_univ α β) :=
 begin
   cases class_comp_prop (set_to_class β (set_empty α β)) x,
   cases h,
@@ -287,25 +301,21 @@ theorem no_set_univ : ¬∃ x:α, ∀ y, set_mem_set β y x :=
 begin
   intro h,
   cases h,
-  let := set_to_class β h_w,
-  cases limitation α this,
-  apply h.2,
+  apply (limitation α $ set_to_class β h_w).not_left_of_right,
   existsi class_eq α β,
+  split,
   intro y,
-  apply exists_unique.intro y,
-  apply (class_eq_prop β _).2,
-  existsi y, refl,
-  intro z,
-  intro,
-  have := (class_eq_prop β _).1 a,
-  cases this,
-  have := pair_ext this_h,
-  cases this,
-  rw this_left,
-  rw this_right,
-  apply h.2,
+  existsi y,
+  split,
+  apply set_to_class_ext,
+  exact h_h y,
+  apply class_eq_ext,
+  refl,
+  intros x y z hx hxy hxz,
+  rw ←class_eq_of_eq hxy,
+  rw ←class_eq_of_eq hxz,
   existsi h_w,
-  exact set_to_class_prop β _
+  exact set_to_class_prop β h_w
 end
 
 theorem no_set_mem_self : ¬set_mem_set β x x :=
@@ -344,7 +354,7 @@ end
 
 variables (β x)
 
-def contains_set : β := class_range α (class_int α (class_prod α (set_to_class β (singleton β x)) (@class_univ α β _)) (class_mem α β))
+def contains_set : β := class_range α (class_int α (class_prod α (set_to_class β (singleton β x)) (class_univ α β)) (class_mem α β))
 
 variables {β x}
 
@@ -385,46 +395,30 @@ begin
   exact hx
 end
 
-def class_ne : β := class_int α (class_prod α (@class_univ α β _) (@class_univ α β _)) (class_comp α (class_eq α β))
+variables (α β)
+
+def class_ne : β := class_int α (class_prod α (class_univ α β) (class_univ α β)) (class_comp α (class_eq α β))
+
+variables {α β}
 
 theorem class_comp_prop1 : set_mem_class x (class_comp α X) ↔ ¬set_mem_class x X :=
-begin
-  split,
-  intro hx,
-  cases class_comp_prop X x,
-  exfalso,
-  exact h.2 hx,
-  exact h.2,
-  intro hx,
-  cases class_comp_prop X x,
-  exfalso,
-  exact hx h.1,
-  exact h.1
-end
+⟨(class_comp_prop X x).not_left_of_right, (class_comp_prop X x).right_of_not_left⟩
 
 theorem class_comp_prop2 : set_mem_class x X ↔ ¬set_mem_class x (class_comp α X) :=
-begin
-  split,
-  intro hx,
-  cases class_comp_prop X x,
-  exact h.2,
-  exfalso,
-  exact h.2 hx,
-  intro hx,
-  cases class_comp_prop X x,
-  exact h.1,
-  exfalso,
-  exact hx h.1
-end
+⟨(class_comp_prop X x).not_right_of_left, (class_comp_prop X x).left_of_not_right⟩
+
+variables (α β)
 
 -- class of (a,(b,c)) where a in c and b in c
-def class_two_mem : β := class_int α (class_prod α (@class_univ α β _) (class_mem α β)) (class_prod_comm' α ((class_prod α (@class_univ α β _) (class_mem α β))))
+def class_two_mem : β := class_int α (class_prod α (class_univ α β) (class_mem α β)) (class_prod_comm' α ((class_prod α (class_univ α β) (class_mem α β))))
 -- class of ((a,b),c) where a ≠ b and a ∈ c and b ∈ c
-def class_ne_mem : β := class_int α (class_prod_assoc α $ @class_two_mem α β _) (class_prod α (@class_ne α β _) (@class_univ α β _))
+def class_ne_mem : β := class_int α (class_prod_assoc α $ class_two_mem α β) (class_prod α (class_ne α β) (class_univ α β))
 -- class of singletons
-def class_singleton : β := class_int α (class_comp α (set_to_class β (singleton β (@set_empty α β _)))) (class_comp α (class_range α (@class_ne_mem α β _)))
+def class_singleton : β := class_int α (class_comp α (set_to_class β (singleton β (@set_empty α β _)))) (class_comp α (class_range α (class_ne_mem α β)))
 
-theorem class_singleton_prop : set_mem_class x (@class_singleton α β _) ↔ ∃ y, x = singleton β y :=
+variables {α β}
+
+theorem class_singleton_prop : set_mem_class x (class_singleton α β) ↔ ∃ y, x = singleton β y :=
 begin
   unfold class_singleton, unfold class_ne_mem,
   split,
@@ -514,29 +508,133 @@ begin
   cases hx with z h,
   rw class_int_prop at h,
   cases h with h1 h2,
-  rw class_prod_assoc_prop at h1,
-  cases h1 with a hbc,
-  cases hbc with b hc,
-  cases hc with c h,
-  cases h with h1 h3,
-  cases pair_ext h3 with h4 h5,
-  rw h4 at *,
-  rw ←h5 at *,
+  have h3 := (and_iff_left class_univ_prop).1 (class_prod_split h2),
+  unfold class_ne at h3,
+  rw class_int_prop at h3,
+  cases h3 with h3 h4,
+  rw class_prod_prop at h3,
+  cases h3 with a h3,
+  cases h3 with b h3,
+  have h3 := (and_iff_right class_univ_prop).1 ((and_iff_right class_univ_prop).1 h3),
+  rw h3 at *,
+  have h1 := class_prod_of_prod_assoc h1,
   unfold class_two_mem at h1,
   rw class_int_prop at h1,
-  cases h1 with h6 h7,
-  have h1 := class_mem_of_mem ((and_iff_right class_univ_prop).1 (class_prod_split h6)),
+  cases h1 with h1 h5,
+  have h5 := class_mem_of_mem ((and_iff_right class_univ_prop).1 $ class_prod_split $ class_prod_of_prod_comm' h5),
+  rw singleton_prop at h5,
+  rw h5 at h2,
+  have h1 := class_mem_of_mem ((and_iff_right class_univ_prop).1 $ class_prod_split h1),
   rw singleton_prop at h1,
-  rw h1 at *,
-  have h1 := class_mem_of_mem ((and_iff_right class_univ_prop).1 (class_prod_split $ class_prod_of_prod_comm' h7)),
-  rw singleton_prop at h1,
-  rw h1 at *,
-  have h1 := (and_iff_left class_univ_prop).1 (class_prod_split h2),
-  unfold class_ne at h1,
-  rw class_int_prop at h1,
-  apply class_comp_prop1.1 h1.2,
+  rw h1 at h2,
+  have h2 := (and_iff_left class_univ_prop).1 (class_prod_split h2),
+  unfold class_ne at h2,
+  rw class_int_prop at h2,
+  apply (class_comp_prop _ _).not_left_of_right h2.2,
   apply class_eq_ext,
   refl
+end
+
+variables (α β)
+
+def class_pair_singleton : β := class_int α (class_mem α β) (class_prod α (class_univ α β) (class_singleton α β))
+
+variables {α β}
+
+theorem class_pair_singleton_prop : set_mem_class z (class_pair_singleton α β) ↔ ∃ x y, y = singleton β x ∧ z = pair β x y :=
+begin
+  unfold class_pair_singleton,
+  rw class_int_prop,
+  rw class_mem_prop,
+  split,
+  intro h,
+  cases h with h1 h3,
+  cases h1 with x h1,
+  cases h1 with y h1,
+  cases h1 with h1 h2,
+  rw h2 at *,
+  have h3 := (class_prod_split h3).2,
+  rw class_singleton_prop at h3,
+  cases h3 with a ha,
+  existsi a,
+  existsi y,
+  split,
+  exact ha,
+  rw ha at *,
+  rw singleton_prop at h1,
+  rw h1 at *,
+  refl,
+  intro h,
+  cases h with x h,
+  cases h with y h,
+  cases h with h1 h2,
+  split,
+  existsi x,
+  existsi y,
+  split,
+  rw h1,
+  rw singleton_prop,
+  exact h2,
+  rw h2,
+  apply class_prod_ext,
+  apply class_univ_prop,
+  rw class_singleton_prop,
+  existsi x,
+  exact h1
+end
+
+theorem class_pair_singleton_pair : set_mem_class (pair β x y) (class_pair_singleton α β) ↔ y = singleton β x :=
+begin
+  rw class_pair_singleton_prop,
+  split,
+  intro h,
+  cases h with a h,
+  cases h with b h,
+  cases pair_ext h.2,
+  exact left.symm ▸ right.symm ▸ h.1,
+  intro hyx,
+  existsi x,
+  existsi y,
+  split,
+  exact hyx,
+  refl
+end
+
+theorem proper_class_singleton : ¬∃ x:α, ∀ y, set_mem_set β y x ↔ ∃ z, y = singleton β z :=
+begin
+  intro hx,
+  cases hx with x h,
+  apply (limitation α (class_singleton α β)).not_left_of_right,
+  existsi class_prod_comm α (class_pair_singleton α β),
+  split,
+  intro y,
+  existsi singleton β y,
+  split,
+  rw class_singleton_prop,
+  existsi y,
+  refl,
+  apply class_prod_comm_ext,
+  rw class_pair_singleton_pair,
+  intros x y z hx hxy hxz,
+  rw class_singleton_prop at hx,
+  cases hx with a ha,
+  rw ha at *,
+  have hxy := class_prod_of_prod_comm hxy,
+  rw class_pair_singleton_pair at hxy,
+  have h1 := singleton_prop.2 (refl a),
+  rw hxy at h1,
+  rw singleton_prop at h1,
+  rw ←h1,
+  have hxz := class_prod_of_prod_comm hxz,
+  rw class_pair_singleton_pair at hxz,
+  have h1 := singleton_prop.2 (refl a),
+  rw hxz at h1,
+  rw singleton_prop at h1,
+  rw ←h1,
+  existsi x,
+  intro z,
+  rw h,
+  rw class_singleton_prop
 end
 
 end nbg
