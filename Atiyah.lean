@@ -16,7 +16,7 @@ def zero_ring_of_zero_eq_one (α : Type u) [comm_ring α] : (0:α)=1 → zero_ri
 
 -- page 2
 
-class is_hom {α : Type u} {β : Type v} [comm_ring α] [comm_ring β] (f : α → β) :=
+class is_hom {α : Type u} {β : Type v} [comm_ring α] [comm_ring β] (f : α → β) : Prop :=
 (map_add : ∀ {x y}, f (x + y) = f x + f y)
 (map_mul : ∀ {x y}, f (x * y) = f x * f y)
 (map_one : f 1 = 1)
@@ -47,7 +47,7 @@ f (x - y) = f (x + -y) : congr_arg f $ sub_eq_add_neg x y
 
 end is_hom
 
-class subring (α : Type u) [comm_ring α] (S : set α) :=
+class subring (α : Type u) [comm_ring α] (S : set α) : Prop :=
 (add_mem : ∀ {x y}, x ∈ S → y ∈ S → x + y ∈ S)
 (neg_mem : ∀ {x}, x ∈ S → -x ∈ S)
 (mul_mem : ∀ {x y}, x ∈ S → y ∈ S → x * y ∈ S)
@@ -101,14 +101,14 @@ instance is_hom.comp (α : Type u) (β : Type v) (γ : Type w)
     g (f 1) = g 1 : congr_arg g $ is_hom.map_one f
     ... = 1 : is_hom.map_one g }
 
-class is_ideal {α : Type u} [comm_ring α] (S : set α) :=
+class is_ideal (α : Type u) [comm_ring α] (S : set α) : Prop :=
 (zero_mem : (0 : α) ∈ S)
 (add_mem : ∀ {x y}, x ∈ S → y ∈ S → x + y ∈ S)
 (mul_mem : ∀ {x y}, x ∈ S → x * y ∈ S)
 
 namespace is_ideal
 
-variables {α : Type u} [comm_ring α] (S : set α) [is_ideal S]
+variables {α : Type u} [comm_ring α] (S : set α) [is_ideal α S]
 include S
 
 instance : setoid α :=
@@ -126,7 +126,11 @@ instance : setoid α :=
       x - z = (x - y) + (y - z) : eq.symm (sub_add_sub_cancel x y z)
         ... ∈ S                 : add_mem hxy hyz ⟩ }
 
+variables (α)
+
 def coset := quotient (is_ideal.setoid S)
+
+variables {α}
 
 instance : comm_ring (quotient (is_ideal.setoid S)) :=
 {
@@ -178,34 +182,41 @@ instance : comm_ring (quotient (is_ideal.setoid S)) :=
                   ... ∈ S : zero_mem S end),
 }
 
-instance coset.comm_ring : comm_ring (coset S) :=
+instance coset.comm_ring : comm_ring (coset α S) :=
 (by apply_instance : comm_ring (quotient $ is_ideal.setoid S))
 
-def to_quotient : is_hom (quotient.mk : α → coset S) :=
+def to_quotient : is_hom (quotient.mk : α → coset α S) :=
 { map_add := λ x y, rfl,
   map_mul := λ x y, rfl,
   map_one := rfl }
 
 @[simp] lemma add_coset (x y : α) : ⟦x⟧ + ⟦y⟧ = ⟦x + y⟧ := rfl
+@[simp] lemma sub_coset (x y : α) : ⟦x⟧ - ⟦y⟧ = ⟦x - y⟧ := rfl
 @[simp] lemma mul_coset (x y : α) : ⟦x⟧ * ⟦y⟧ = ⟦x * y⟧ := rfl
-@[simp] lemma one_coset : (1:coset S) = ⟦(1:α)⟧ := rfl
+@[simp] lemma neg_coset (x : α) : -⟦x⟧ = ⟦-x⟧ := rfl
+@[simp] lemma one_coset : (1:coset α S) = ⟦(1:α)⟧ := rfl
+@[simp] lemma zero (x : α) : x ∈ S ↔ ⟦x⟧ = 0 :=
+⟨ λ hx, quotient.sound (calc x - 0 = x : sub_zero x ... ∈ S : hx),
+  λ hx, calc x = x - 0 : (sub_zero x).symm ... ∈ S : quotient.exact hx ⟩
 
 end is_ideal
 
+local infix / := is_ideal.coset
+
 def zero_ideal (α : Type u) [comm_ring α] : set α := {(0:α)}
-instance zero_ideal.is_ideal (α : Type u) [comm_ring α] : is_ideal $ zero_ideal α :=
+instance zero_ideal.is_ideal (α : Type u) [comm_ring α] : is_ideal α $ zero_ideal α :=
 { zero_mem := set.mem_singleton 0,
   add_mem  := λ x y hx hy, begin unfold zero_ideal at *; rw set.mem_singleton_iff at *, rw [hx, hy], simp end,
   mul_mem  := λ x y hx, begin unfold zero_ideal at *; rw set.mem_singleton_iff at *, rw hx, simp end }
 
 def univ_ideal (α : Type u) [comm_ring α] : set α := set.univ
-instance univ_ideal.is_ideal (α : Type u) [comm_ring α] : is_ideal $ univ_ideal α :=
+instance univ_ideal.is_ideal (α : Type u) [comm_ring α] : is_ideal α $ univ_ideal α :=
 { zero_mem := ⟨⟩,
   add_mem  := λ x y hx hy, ⟨⟩,
   mul_mem  := λ x y hx, ⟨⟩ }
 
 def is_ideal.hom_preimage {α : Type u} {β : Type v} [comm_ring α] [comm_ring β]
-(f : α → β) [is_hom f] (S : set β) [is_ideal S] : is_ideal ((f)⁻¹' S) :=
+(f : α → β) [is_hom f] (S : set β) [is_ideal β S] : is_ideal α ((f)⁻¹' S) :=
 { zero_mem := by simp [is_hom.map_zero f, is_ideal.zero_mem],
   add_mem  := λ x y (hx : f x ∈ S) hy, by simp [is_hom.map_add f, is_ideal.add_mem hx hy],
   mul_mem  := λ x y (hx : f x ∈ S), by simp [is_hom.map_mul f, is_ideal.mul_mem hx] }
@@ -214,31 +225,21 @@ def is_ideal.hom_preimage {α : Type u} {β : Type v} [comm_ring α] [comm_ring 
 
 section prop_1_1
 
-variables {α : Type u} [comm_ring α] (S : set α) [is_ideal S]
+variables {α : Type u} [comm_ring α] (S : set α) [is_ideal α S]
 
-def contains_ideal := {i : Σ T : set α, is_ideal T // S ⊆ i.1}
-def ideal_quotient := Σ i : set $ is_ideal.coset S, is_ideal i
+def contains_ideal := {i : {T : set α // is_ideal α T} // S ⊆ i.1}
+def ideal_quotient := {i : set $ α/S // is_ideal (α/S) i}
 
-theorem contains_ideal.ext : ∀ x y : contains_ideal S, x.val.1 = y.val.1 → x = y :=
-λ ⟨⟨_,⟨_,_,_⟩⟩,_⟩ ⟨⟨_,⟨_,_,_⟩⟩,_⟩ hxy, subtype.eq $ sigma.eq hxy
-begin
-  cases hxy,
-  dsimp,
-  congr
-end
+theorem contains_ideal.ext : ∀ x y : contains_ideal S, x.1.1 = y.1.1 → x = y :=
+λ x y hxy, subtype.eq $ subtype.eq hxy
 
 theorem ideal_quotient.ext : ∀ x y : ideal_quotient S, x.1 = y.1 → x = y :=
-λ ⟨_,⟨_,_,_⟩⟩ ⟨_,⟨_,_,_⟩⟩ hxy, sigma.eq hxy
-begin
-  cases hxy,
-  dsimp,
-  congr
-end
+λ x y hxy, subtype.eq hxy
 
 def contains_to_quotient : contains_ideal S → ideal_quotient S :=
 λ ⟨⟨T, ht⟩, h⟩,
-{ fst := quotient.mk '' T,
-  snd :=
+{ val := quotient.mk '' T,
+  property :=
   { zero_mem := ⟨0, ht.zero_mem, rfl⟩,
     add_mem  := λ x y ⟨m, ⟨hm1, hm2⟩⟩ ⟨n, ⟨hn1, hn2⟩⟩, ⟨m + n, by exact is_ideal.add_mem hm1 hn1, by rw [←hm2, ←hn2]; refl⟩,
     mul_mem  := λ x y ⟨m, ⟨hm1, hm2⟩⟩,
@@ -254,13 +255,9 @@ def contains_to_quotient : contains_ideal S → ideal_quotient S :=
 def quotient_to_contains : ideal_quotient S → contains_ideal S :=
 λ ⟨T, ht⟩,
 { val :=
-  { fst := quotient.mk ⁻¹' T,
-    snd := @is_ideal.hom_preimage _ _ _ _ _ (is_ideal.to_quotient S) T ht },
-  property := λ x hx,
-    begin
-      have h : ⟦x⟧ = 0 := quotient.sound (by change x - 0 ∈ S; simpa),
-      simpa [h] using is_ideal.zero_mem T
-    end }
+  { val      := quotient.mk ⁻¹' T,
+    property := @is_ideal.hom_preimage _ _ _ _ _ (is_ideal.to_quotient S) T ht },
+  property := λ x hx, by simpa [(is_ideal.zero _ _).1 hx] using is_ideal.zero_mem T }
 
 theorem contains_to_quotient_to_contains : (quotient_to_contains S) ∘ (contains_to_quotient S) = id :=
 begin
@@ -283,10 +280,7 @@ begin
   existsi y,
   split,
   exact hy,
-  apply quotient.sound,
-  exact calc
-    y - y = 0 : sub_self y
-      ... ∈ S : is_ideal.zero_mem S
+  refl
 end
 
 theorem quotient_to_contains_to_quotient : (contains_to_quotient S) ∘ (quotient_to_contains S) = id :=
@@ -305,7 +299,7 @@ begin
   cases hz with hz1 hz2,
   rwa ←hz2,
   intro hy,
-  cases @quotient.exists_rep _ (is_ideal.setoid S) y with z hz,
+  cases quotient.exists_rep y with z hz,
   existsi z,
   split,
   rwa hz,
@@ -327,7 +321,7 @@ namespace is_hom
 variables {α : Type u} {β : Type v} [comm_ring α] [comm_ring β] (f : α → β) [is_hom f]
 
 def ker : set α := f⁻¹' (zero_ideal β)
-instance ker.is_ideal : is_ideal (ker f) := is_ideal.hom_preimage f $ zero_ideal β
+instance ker.is_ideal : is_ideal α (ker f) := is_ideal.hom_preimage f $ zero_ideal β
 
 def im : set β := f '' set.univ
 instance im.subring : subring β (im f) :=
@@ -347,11 +341,13 @@ structure isomorphism (α : Type u) (β : Type v) [comm_ring α] [comm_ring β] 
 (hfg : ∀ x, f (g x) = x)
 (hgf : ∀ x, g (f x) = x)
 
+infix `≅`:70 := isomorphism
+
 @[simp] lemma quotient.lift_beta {α : Sort u} {β : Sort v} [s : setoid α] (f : α → β) (h : ∀ (a b : α), a ≈ b → f a = f b) (x : α):
 quotient.lift f h (quotient.mk x) = f x := rfl
 
 noncomputable def first_isom (α : Type u) (β : Type v) [comm_ring α] [comm_ring β] (f : α → β) [is_hom f] :
-isomorphism (@is_ideal.coset _ _ (is_hom.ker f) (is_hom.ker.is_ideal f)) (is_hom.im f) :=
+(α / (is_hom.ker f)) ≅ (is_hom.im f) :=
 { f := @quotient.lift α (is_hom.im f) (is_ideal.setoid $ is_hom.ker f) (λ x, ⟨f x, x, ⟨⟩, rfl⟩) (λ x y hxy, subtype.eq $ calc
     f x = f (y + (x - y))   : by norm_num
       ... = f y + f (x - y) : is_hom.map_add f
@@ -411,7 +407,7 @@ isomorphism (@is_ideal.coset _ _ (is_hom.ker f) (is_hom.ker.is_ideal f)) (is_hom
   hgf :=
     begin
       intro x,
-      cases @quotient.exists_rep _ (is_ideal.setoid $ is_hom.ker f) x with y hy,
+      cases quotient.exists_rep x with y hy,
       rw ←hy,
       simp [first_isom._match_1],
       change classical.some _ - y ∈ is_hom.ker f,
@@ -435,7 +431,7 @@ variables {α : Type u} [comm_ring α] (x : α)
 
 def principal_ideal := {y | ∃ z, x * z = y}
 
-instance principal_ideal.is_ideal : is_ideal $ principal_ideal x :=
+instance principal_ideal.is_ideal : is_ideal α $ principal_ideal x :=
 { zero_mem := ⟨0, mul_zero x⟩,
   add_mem  := λ y₁ y₂ ⟨z₁, hz₁⟩ ⟨z₂, hz₂⟩, ⟨z₁ + z₂, calc
     x * (z₁ + z₂) = x * z₁ + x * z₂ : left_distrib x z₁ z₂
@@ -467,7 +463,7 @@ set.ext $ λ x, ⟨ λ ⟨y, hy⟩, by rw [←hy]; simp [zero_mul, zero_ideal], 
 
 end principal_ideal
 
-theorem is_ideal.eq_univ_of_contains_unit {α : Type u} [comm_ring α] (S : set α) [is_ideal S] :
+theorem is_ideal.eq_univ_of_contains_unit {α : Type u} [comm_ring α] (S : set α) [is_ideal α S] :
 (∃ x:α, x ∈ S ∧ (∃ y, x * y = 1)) → S = set.univ :=
 λ ⟨ x, ⟨ hx, ⟨ y, hy ⟩ ⟩ ⟩, set.ext $ λ z, ⟨ λ hz, ⟨ ⟩ , λ hz, calc
    z = 1 * z : eq.symm $ one_mul z
@@ -482,18 +478,19 @@ section prop_1_2
 
 variables (α : Type u) [comm_ring α] (zero_ne_one : (0:α) ≠ 1)
 
-class invertible_of_non_zero :=
+class is_field : Prop :=
 (h : ∀ {x:α}, x ≠ 0 → ∃ y, x * y = 1)
+(zero_ne_one : (0:α) ≠ 1)
 
-class ideal_eq_zero_or_univ :=
-(h : ∀ (S : set α) [is_ideal S], S = zero_ideal α ∨ S = univ_ideal α)
+class ideal_eq_zero_or_univ : Prop :=
+(h : ∀ (S : set α) [is_ideal α S], S = zero_ideal α ∨ S = univ_ideal α)
 
-class hom_inj :=
+class hom_inj : Prop :=
 (h : ∀ (β : Type u) [comm_ring β] (zero_ne_one₂ : (0:β) ≠ 1) (f : α → β) [is_hom f] (x y : α), f x = f y → x = y)
 
 include zero_ne_one
 
-theorem invertible_of_non_zero.to_ideal_eq_zero_or_univ : invertible_of_non_zero α → ideal_eq_zero_or_univ α :=
+theorem is_field.to_ideal_eq_zero_or_univ : is_field α → ideal_eq_zero_or_univ α :=
 begin
   intro hf,
   cases hf,
@@ -503,7 +500,7 @@ begin
   right,
   cases h with x hx,
   apply is_ideal.eq_univ_of_contains_unit S,
-  exact ⟨ x, hx.2, hf hx.1 ⟩,
+  exact ⟨ x, hx.2, hf_h hx.1 ⟩,
   left,
   apply set.ext,
   intro x,
@@ -542,14 +539,14 @@ begin
   trivial
 end
 
-theorem hom_inj.to_invertible_of_non_zero : hom_inj α → invertible_of_non_zero α :=
+theorem hom_inj.to_is_field : hom_inj α → is_field α :=
 begin
   intro h,
   cases h,
   constructor,
   intros x hx,
-  specialize h (is_ideal.coset (principal_ideal x)),
-  cases classical.em ((0 : is_ideal.coset $ principal_ideal x) = 1) with h1 h1,
+  specialize h (α / principal_ideal x),
+  cases classical.em ((0 : α / principal_ideal x) = 1) with h1 h1,
   have := @quotient.exact _ (is_ideal.setoid $ principal_ideal x) _ _ h1,
   change (0:α) - 1 ∈ principal_ideal x at this,
   have : (1:α) ∈ principal_ideal x := calc
@@ -560,15 +557,175 @@ begin
   exfalso,
   apply hx,
   apply h,
-  apply quotient.sound,
-  change x - 0 ∈ principal_ideal x,
+  apply (is_ideal.zero _ _).1,
   existsi (1:α),
-  simp
+  simp,
+  exact zero_ne_one
 end
 
 end prop_1_2
 
 -- Proposition 1.2 end
 
-class is_prime_ideal {α : Type u} [comm_ring α] (S : set α) [is_ideal S] :=
+section prime_ideals_and_maximal_ideals
+
+variables {α : Type u} [comm_ring α] (S : set α) [is_ideal α S]
+
+class is_prime_ideal : Prop :=
+(not_univ_ideal : S ≠ univ_ideal α)
 (mem_or_mem_of_mul_mem : ∀ {x y : α}, x * y ∈ S → x ∈ S ∨ y ∈ S)
+
+class is_maximal_ideal : Prop :=
+(not_univ_ideal : S ≠ univ_ideal α)
+(no_between : ∀ (T : set α) [is_ideal α T], S ⊆ T → T = S ∨ T = univ_ideal α)
+
+variable α
+
+class is_integral_domain : Prop :=
+(eq_zero_or_eq_zero_of_mul_eq_zero : ∀ a b : α, a * b = 0 → a = 0 ∨ b = 0)
+(zero_ne_one : 0 ≠ (1:α))
+
+variable {α}
+
+theorem prime_iff_quotient_integral_domain : is_prime_ideal S ↔ is_integral_domain (α/S) :=
+begin
+  split,
+  intro h,
+  cases h,
+  constructor,
+  intros x y hxy,
+  cases quotient.exists_rep x with m hm,
+  cases quotient.exists_rep y with n hn,
+  rw ←hm at *,
+  rw ←hn at *,
+  simp only [is_ideal.mul_coset] at hxy,
+  have hxy2 := quotient.exact hxy,
+  change m * n - 0 ∈ S at hxy2,
+  simp only [sub_zero (m * n)] at hxy2,
+  cases h_mem_or_mem_of_mul_mem hxy2 with h h,
+  left, apply quotient.sound, change m - 0 ∈ S, simpa,
+  right, apply quotient.sound, change n - 0 ∈ S, simpa,
+  intro h,
+  have h2 := quotient.exact h.symm,
+  change (1:α) - 0 ∈ S at h2,
+  simp only [sub_zero] at h2,
+  apply h_not_univ_ideal,
+  unfold univ_ideal,
+  apply is_ideal.eq_univ_of_contains_unit S,
+  existsi (1:α),
+  split, exact h2, existsi (1:α), simp,
+  intro h,
+  cases h,
+  constructor,
+  intro h, apply h_zero_ne_one,
+  apply eq.symm,
+  apply (is_ideal.zero S 1).1,
+  rw h,
+  constructor,
+  intros x y hxy,
+  rw is_ideal.zero S,
+  rw is_ideal.zero S,
+  rw is_ideal.zero S at hxy,
+  apply h_eq_zero_or_eq_zero_of_mul_eq_zero,
+  simpa
+end
+
+theorem maximal_iff_quotient_field : is_maximal_ideal S ↔ is_field (α/S) :=
+begin
+  split,
+  intro h,
+  cases h,
+  have zero_ne_one : (0:α/S) ≠ 1,
+    intro hz,
+    apply h_not_univ_ideal,
+    unfold univ_ideal,
+    apply is_ideal.eq_univ_of_contains_unit S,
+    existsi (1:α),
+    split,
+    exact (is_ideal.zero S 1).2 hz.symm,
+    existsi (1:α),
+    simp,
+  apply hom_inj.to_is_field _ zero_ne_one,
+  apply ideal_eq_zero_or_univ.to_hom_inj _ zero_ne_one,
+  constructor,
+  intros T _,
+  let U := quotient.mk ⁻¹' T,
+  have hu1 := @is_ideal.hom_preimage _ _ _ _ _ (is_ideal.to_quotient S) T _inst_2_1,
+  have hu2 : S ⊆ U := λ x hx, by simpa [(is_ideal.zero _ _).1 hx] using is_ideal.zero_mem T,
+  specialize h_no_between U hu2,
+  have hu : U = (@quotient.mk α (is_ideal.setoid S)) ⁻¹' T := rfl,
+  rw hu at *,
+  cases h_no_between with h h; unfold set.preimage at h,
+  unfold zero_ideal,
+  left,
+    apply set.ext,
+    intro x,
+    rw set.mem_singleton_iff,
+    cases @quotient.exists_rep _ (is_ideal.setoid S) x with y hy,
+    rw ←hy at *,
+    have := congr_fun h y, rw [←iff_iff_eq, set_of] at this,
+    rw this,
+    exact is_ideal.zero S y,
+  right,
+    apply set.ext,
+    intro x,
+    cases @quotient.exists_rep _ (is_ideal.setoid S) x with y hy,
+    rw ←hy at *,
+    have := congr_fun h y, rw [←iff_iff_eq, set_of] at this,
+    rw this,
+    exact ⟨ λ h, true.intro, λ h, true.intro ⟩,
+  intro h,
+  have h2 := is_field.to_ideal_eq_zero_or_univ (α/S) h.2 h,
+  cases h2,
+  constructor,
+  intro h3,
+  apply h.2.symm,
+  apply (is_ideal.zero _ _).1,
+  rw h3,
+  constructor,
+  intros T _ hs,
+  let U := @quotient.mk α (is_ideal.setoid S) '' T,
+  have hu : U = @quotient.mk α (is_ideal.setoid S) '' T := rfl,
+  have : is_ideal (α/S) U :=
+  { zero_mem := ⟨0, is_ideal.zero_mem T, rfl⟩,
+    add_mem  := λ x y ⟨m, ⟨hm1, hm2⟩⟩ ⟨n, ⟨hn1, hn2⟩⟩, ⟨m + n, by exact is_ideal.add_mem hm1 hn1, by rw [←hm2, ←hn2]; refl⟩,
+    mul_mem  := λ x y ⟨m, ⟨hm1, hm2⟩⟩,
+      begin
+        cases @quotient.exists_rep _ (is_ideal.setoid S) y with n hn,
+        existsi m * n,
+        split,
+        exact is_ideal.mul_mem hm1,
+        rw [←hm2, ←hn],
+        refl
+      end },
+  specialize h2 U,
+  rw hu at *,
+  cases h2,
+  left,
+    apply set.ext,
+    intro x,
+    split,
+    intro hx,
+    have : (@quotient.mk α (is_ideal.setoid S) x) ∈ @quotient.mk α (is_ideal.setoid S) '' T := ⟨ x, hx, rfl ⟩,
+    rw h2 at this,
+    unfold zero_ideal at this,
+    rw set.mem_singleton_iff at this,
+    exact (is_ideal.zero _ _).2 this,
+    exact λ hx, hs hx,
+  right,
+    apply set.ext,
+    intro x,
+    split,
+    intro hx,
+    constructor,
+    intro hx,
+    have := congr_fun h2 (@quotient.mk α (is_ideal.setoid S) x), rw [←iff_iff_eq, univ_ideal, set.univ, iff_true] at this,
+    cases this with y hy,
+    cases hy with hy1 hy2,
+    rw ←sub_eq_zero at hy2,
+    simp at hy2,
+    calc x = y + (y + -x) * -1 : by norm_num
+       ... ∈ T : is_ideal.add_mem hy1 (is_ideal.mul_mem $ hs $ (is_ideal.zero _ _).2 hy2)
+end
+
+end prime_ideals_and_maximal_ideals
