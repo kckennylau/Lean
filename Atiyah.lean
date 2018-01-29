@@ -297,10 +297,10 @@ begin
   exact ⟨ z, by rwa hz, hz ⟩
 end
 
-theorem contains_to_quotient_of_subset (T₁ : set α) [is_ideal α T₁] (T₂ : set α) [is_ideal α T₂] : T₁ ⊆ T₂ → ideal_to_quotient S T₁ ⊆ ideal_to_quotient S T₂ :=
+theorem ideal_to_quotient.subset (T₁ : set α) [is_ideal α T₁] (T₂ : set α) [is_ideal α T₂] : T₁ ⊆ T₂ → ideal_to_quotient S T₁ ⊆ ideal_to_quotient S T₂ :=
 λ h z ⟨ w, ⟨ hw1, hw2 ⟩ ⟩, ⟨ w, h hw1, hw2 ⟩
 
-theorem quotient_to_contains_of_subset (T₁ : set (α/S)) [is_ideal (α/S) T₁] (T₂ : set (α/S)) [is_ideal (α/S) T₂] : T₁ ⊆ T₂ → quotient_to_ideal S T₁ ⊆ quotient_to_ideal S T₂ :=
+theorem quotient_to_ideal.subset (T₁ : set (α/S)) [is_ideal (α/S) T₁] (T₂ : set (α/S)) [is_ideal (α/S) T₂] : T₁ ⊆ T₂ → quotient_to_ideal S T₁ ⊆ quotient_to_ideal S T₂ :=
 λ h z hz, h hz
 
 end prop_1_1
@@ -799,7 +799,7 @@ theorem ideals_not_univ.sUnion (A : set (set α)) (h : A ⊆ ideals_not_univ α)
 ⟨ ideals.sUnion α A (λ i hi, and.elim_left $ h hi) S hs (λ T₁ T₂ ht₁ ht₂, total ht₁ ht₂) ,
   λ ⟨ T, ht, ht2 ⟩ , (h ht).2 ht2 ⟩
 
-theorem non_zero.to_maximal_ideal : (0:α) ≠ 1 → ∃ (S : set α) (hs : is_ideal α S), @is_maximal_ideal _ _ S hs :=
+theorem zero_ne_one.to_maximal_ideal : (0:α) ≠ 1 → ∃ (S : set α) (hs : is_ideal α S), @is_maximal_ideal _ _ S hs :=
 begin
   intro hz,
   have z := @zorn.zorn,
@@ -856,3 +856,66 @@ end
 end prop_1_3
 
 -- Proposition 1.3 end
+
+
+-- Corollary 1.4 start
+
+theorem ideals_not_univ.to_maximal_ideal {α : Type u} [comm_ring α] (S : set α) [is_ideal α S] :
+S ∈ ideals_not_univ α → ∃ (m : set α) (hm : is_ideal α m), @is_maximal_ideal _ _ m hm ∧ S ⊆ m :=
+begin
+  intro h,
+  cases h with h1 h2,
+  have z := zero_ne_one.to_maximal_ideal (α/S),
+  specialize z (λ h, h2 $ (is_ideal.zero S 1).2 h.symm),
+  cases z with m hm,
+  cases hm with h1 h2,
+  existsi quotient_to_ideal S m,
+  existsi quotient_to_ideal.is_ideal S m,
+  have hsm : S ⊆ quotient_to_ideal S m,
+    intro x,
+    simp [is_ideal.zero S,is_ideal.to_coset],
+    intro hx,
+    rw hx,
+    apply is_ideal.zero_mem,
+  split,
+  cases h2,
+  constructor,
+  intro h,
+  apply h2_not_univ_ideal,
+  rw [set.set_eq_def] at h,
+  apply set.ext,
+  intro x,
+  cases is_ideal.coset_rep x with y hy,
+  rw ←hy,
+  specialize h y,
+  simp at *,
+  exact h,
+  intros T _ ht,
+  have hst : S ⊆ T := set.subset.trans hsm ht,
+  specialize h2_no_between (ideal_to_quotient S T),
+  have ht2 := ideal_to_quotient.subset S _ _ ht,
+  rw quotient_to_contains_to_quotient at ht2,
+  specialize h2_no_between ht2,
+  cases h2_no_between with h h,
+  left,
+  apply set.eq_of_subset_of_subset,
+  rw set.subset.antisymm_iff at h,
+  have h3 := quotient_to_ideal.subset S _ _ h.1,
+  rw contains_to_quotient_to_contains at h3,
+  exact h3,
+  exact hst,
+  exact ht,
+  right,
+  apply set.ext,
+  rw set.set_eq_def at h,
+  intro x,
+  specialize h (is_ideal.to_coset S x),
+  simp at *,
+  cases h with y hy,
+  cases hy with hy1 hy2,
+  calc x = y - (y - x) : by norm_num
+     ... ∈ T : is_ideal.sub_mem hy1 (hst hy2),
+  exact hsm
+end
+
+-- Corollary 1.4 end
