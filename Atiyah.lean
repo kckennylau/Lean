@@ -318,8 +318,17 @@ end
 theorem ideal_to_quotient.subset (T₁ : set α) [is_ideal α T₁] (T₂ : set α) [is_ideal α T₂] : T₁ ⊆ T₂ → ideal_to_quotient S T₁ ⊆ ideal_to_quotient S T₂ :=
 λ h z ⟨ w, ⟨ hw1, hw2 ⟩ ⟩, ⟨ w, h hw1, hw2 ⟩
 
+theorem ideal_to_quotient.univ : ideal_to_quotient S (univ_ideal α) = univ_ideal (α/S) :=
+set.ext $ λ x, ⟨ λ hx, trivial, λ hx, by simpa using is_ideal.coset_rep x ⟩
+
 theorem quotient_to_ideal.subset (T₁ : set (α/S)) [is_ideal (α/S) T₁] (T₂ : set (α/S)) [is_ideal (α/S) T₂] : T₁ ⊆ T₂ → quotient_to_ideal S T₁ ⊆ quotient_to_ideal S T₂ :=
 λ h z hz, h hz
+
+theorem quotient_to_ideal.zero : quotient_to_ideal S (zero_ideal $ α/S) = S :=
+set.ext $ λ x, by simp [is_ideal.zero S x]
+
+theorem quotient_to_ideal.univ : quotient_to_ideal S (univ_ideal $ α/S) = univ_ideal α :=
+set.ext $ λ x, ⟨ λ hx, trivial, λ hx, trivial ⟩
 
 end prop_1_1
 
@@ -422,7 +431,7 @@ def nilpotent {α : Type u} [comm_ring α] (x : α) := ∃ n, x^(nat.succ n) = 0
 
 section principal_ideal
 
-variables {α : Type u} [comm_ring α] (x y : α)
+variables {α : Type u} [comm_ring α] (x : α)
 
 def principal_ideal : set α := { y | ∃ z, x * z = y }
 
@@ -454,8 +463,10 @@ theorem unit_iff_principal_ideal_eq_one : (∃ y, x * y = 1) ↔ principal_ideal
 theorem mem_principal_ideal : x ∈ principal_ideal x :=
 ⟨ 1, mul_one x ⟩
 
-theorem principal_ideal.subset_of_mem : x ∈ principal_ideal y → principal_ideal x ⊆ principal_ideal y :=
-λ ⟨ n, hn ⟩ z ⟨ w, hw ⟩ , ⟨ n * w, by rw [←hw, ←hn]; ac_refl ⟩
+variable {x}
+
+theorem principal_ideal.subset_of_mem {S : set α} [is_ideal α S] : x ∈ S → principal_ideal x ⊆ S :=
+λ h z ⟨ w, hw ⟩ , set.mem_of_eq_of_mem hw.symm $ is_ideal.mul_mem h
 
 variable (α)
 
@@ -1136,3 +1147,188 @@ begin
     exact ⟨ n, p ⟩,
     repeat {assumption}
 end
+
+@[simp] lemma pow_coset {α : Type u} [comm_ring α] {S : set α} [is_ideal α S] (x : α) :
+Π (n : nat), ⟦x⟧^n = ⟦x^n⟧
+| 0            := rfl
+| (nat.succ n) := calc
+  ⟦x⟧^(nat.succ n) = ⟦x⟧ * ⟦x⟧^n : rfl
+               ... = ⟦x⟧ * ⟦x^n⟧ : congr_arg _ (pow_coset n)
+               ... = ⟦x^(nat.succ n)⟧ : rfl
+
+-- Proposition 1.7 start
+
+instance nilpotent.is_ideal (α : Type u) [comm_ring α] : is_ideal α nilpotent :=
+{ zero_mem := ⟨ 0, by unfold monoid.pow; exact zero_mul 1 ⟩,
+  add_mem  := λ x y ⟨ m, hm ⟩ ⟨ n, hn ⟩ , ⟨ m*n + m + n, 
+    begin
+      let S := principal_ideal x,
+      have hs : is_ideal α S, apply_instance,
+      have h1 : ⟦y⟧^(nat.succ n) = 0,
+      simp [(is_ideal.zero S _).symm, hn],
+      have h2 : ⟦x+y⟧ = ⟦y⟧,
+      apply quotient.sound,
+      apply set.mem_of_eq_of_mem (add_sub_cancel x y) (mem_principal_ideal x),
+      rw [←h2, pow_coset, ←is_ideal.zero] at h1,
+      cases h1 with z hz,
+      exact calc
+              (x + y)^nat.succ (m*n + m + n)
+            = (x + y)^(nat.succ n * nat.succ m) : congr_arg (λ b, (x + y)^b) (by simp [nat.succ_eq_add_one, mul_add, add_mul, mul_comm]; norm_num)
+        ... = ((x + y)^nat.succ n)^nat.succ m : pow_mul _ _ _
+        ... = (x * z)^nat.succ m : congr_arg (λ b, b^nat.succ m) hz.symm
+        ... = x^nat.succ m * z^nat.succ m : mul_pow _ _ _
+        ... = 0 * z^nat.succ m : congr_arg (λ b, b * z^nat.succ m) hm
+        ... = 0 : zero_mul _
+    end ⟩ ,
+  mul_mem  := λ x y ⟨ m, hm ⟩ , ⟨ m, calc
+    (x * y)^nat.succ m = x^nat.succ m * y^nat.succ m : mul_pow _ _ _
+                   ... = 0 * y^nat.succ m : congr_arg (λ b, b * y^nat.succ m) hm
+                   ... = 0 : zero_mul _ ⟩ }
+
+theorem quotient_nilpotent_zero_of_nilpotent {α : Type u} [comm_ring α]
+(x : α/nilpotent) : nilpotent x → x = 0 :=
+λ ⟨ n, hn ⟩,
+begin
+  cases (is_ideal.coset_rep x) with y hy,
+  rw [←hy, ←is_ideal.zero],
+  rw [←hy, pow_coset, ←is_ideal.zero] at hn,
+  cases hn with z hz,
+  existsi n * z + n + z,
+  rw [nat.succ_eq_add_one],
+  rw [nat.succ_eq_add_one, nat.succ_eq_add_one, ←pow_mul] at hz,
+  simp only [add_mul, mul_add, one_mul, mul_one] at hz,
+  simpa using hz
+end
+
+-- Proposition 1.7 end
+
+
+-- Proposition 1.8 start
+
+theorem nilpotent_eq_intersection_of_prime_ideals (α : Type u) [comm_ring α] :
+nilpotent = ⋂₀ { S | ∃ (h : is_ideal α S), @@is_prime_ideal _ S h } :=
+begin
+  apply set.ext,
+  intro z,
+  split,
+  intros hz S hs,
+  cases hs with _ _,
+  cases hz with n hn,
+  have p : ∀ m, z^m ∈ S → z ∈ S,
+    intro m,
+    induction m with m hm,
+    intro hz,
+    unfold monoid.pow at hz,
+    apply set.mem_of_eq_of_mem,
+    exact eq.symm (one_mul z),
+    apply is_ideal.mul_mem hz,
+    intro hz,
+    unfold monoid.pow at hz,
+    have p := is_prime_ideal.mem_or_mem_of_mul_mem hz,
+    cases p, exact p, exact hm p,
+  specialize p (nat.succ n),
+  specialize p (set.mem_of_eq_of_mem hn $ is_ideal.zero_mem S),
+  exact p,
+  intro hz,
+  apply @of_not_not _ (classical.prop_decidable _),
+  intro h,
+  have h := forall_not_of_not_exists h,
+  let S : set (set α) := { S | ∃ (h : is_ideal α S), ∀ n, z^nat.succ n ∉ S },
+  have Z := @zorn.zorn,
+  specialize @Z S,
+  specialize @Z (λ T₁ T₂, T₁.val ⊆ T₂.val),
+  specialize @Z (λ c hc,
+    begin
+      let U : set (set α) := { T | ∃ X : ↥S, X.val = T ∧ X ∈ c },
+      cases classical.em (∃ T, T ∈ U) with ht ht,
+      fapply exists.intro,
+      fapply subtype.mk,
+      exact ⋃₀ U,
+      have hu := ideals.sUnion α U,
+      specialize hu (λ x ⟨ ⟨ A, ⟨ h, h2 ⟩ ⟩ , ⟨ hx, hc ⟩ ⟩ , by rwa ←hx),
+      cases ht with T ht,
+      specialize hu T ht,
+      specialize hu (λ T₁ T₂ ⟨ ⟨ t₁ , ht1 ⟩ , ⟨ ht2, ht3 ⟩ ⟩ ⟨ ⟨ t₂ , ht4 ⟩ , ⟨ ht5, ht6 ⟩ ⟩,
+        begin
+          specialize hc _ ht3 _ ht6,
+          rw [←ht2, ←ht5],
+          cases classical.em (subtype.mk t₁ ht1 = subtype.mk t₂ ht4),
+          rw h_1,
+          left, intro x, exact id,
+          specialize hc h_1,
+          exact hc
+        end),
+      existsi hu,
+      intros n hn,
+      cases hn with B hn,
+      cases hn with hb hn,
+      cases hb with C hc,
+      cases C with C hc,
+      cases hc with hc1 hc2,
+      cases hc with _ hc3,
+      rw ←hc1 at hn,
+      apply hc3 n hn,
+      intros A H x hx,
+      cases A with A ha,
+      exact ⟨ A, ⟨ ⟨ A, ha ⟩ , rfl, H ⟩, hx ⟩,
+      fapply exists.intro,
+      fapply subtype.mk,
+      exact zero_ideal α,
+      exact ⟨ zero_ideal.is_ideal α, λ n hn, h n $ eq_of_mem_singleton hn ⟩ ,
+      intros A ha,
+      exfalso,
+      exact ht ⟨ A.val, A, rfl, ha ⟩
+    end),
+  specialize Z (λ A B C hab hbc x hx, hbc $ hab hx),
+  cases Z with m Z,
+  cases m with m hm1,
+  cases hm1 with h1 h2,
+  specialize hz m,
+  have : is_prime_ideal m,
+  constructor,
+  intro hm,
+  apply h2 0,
+  rw hm,
+  trivial,
+  intros x y hxy,
+  let X : set α := quotient_to_ideal m (principal_ideal ⟦x⟧),
+  let Y : set α := quotient_to_ideal m (principal_ideal ⟦y⟧),
+  cases classical.em (∃ n, z^nat.succ n ∈ X) with hX hX,
+  cases classical.em (∃ n, z^nat.succ n ∈ Y) with hY hY,
+  cases hX with p hp,
+  cases hp with b hb,
+  cases hY with q hq,
+  cases hq with d hd,
+  cases is_ideal.coset_rep b with c hc,
+  rw [←hc, is_ideal.mul_coset] at hb,
+  cases is_ideal.coset_rep d with e he,
+  rw [←he, is_ideal.mul_coset] at hd,
+  exfalso,
+  apply h2 (p + q + 1),
+  exact calc
+          z^nat.succ (p + q + 1)
+        = z^(nat.succ p + nat.succ q) : by simp [nat.succ_eq_add_one]
+    ... = z^nat.succ p * z^nat.succ q : pow_add _ _ _
+    ... = z^nat.succ p * (y * e - (y * e - z^nat.succ q)) : by norm_num
+    ... = z^nat.succ p * (y * e) - z^nat.succ p * (y * e - z^nat.succ q) : mul_sub _ _ _
+    ... = z^nat.succ p * (y * e) - (y * e - z^nat.succ q) * z^nat.succ p : by ac_refl
+    ... = (x * c - (x * c - z^nat.succ p)) * (y * e) - (y * e - z^nat.succ q) * z^nat.succ p : by norm_num
+    ... = (x * c) * (y * e) - (x * c - z^nat.succ p) * (y * e) - (y * e - z^nat.succ q) * z^nat.succ p : by rw sub_mul
+    ... = (x * y) * (c * e) - (x * c - z^nat.succ p) * (y * e) - (y * e - z^nat.succ q) * z^nat.succ p : by ac_refl
+    ... ∈ m : is_ideal.sub_mem (is_ideal.sub_mem (is_ideal.mul_mem hxy) (is_ideal.mul_mem $ quotient.exact hb)) (is_ideal.mul_mem $ quotient.exact hd),
+  have z1 := Z ⟨ Y, ⟨ _, forall_not_of_not_exists hY ⟩ ⟩ (quotient_to_ideal.contains _ _),
+  right,
+    apply set.mem_of_mem_of_subset _ z1,
+    apply quotient_to_ideal.is_ideal,
+    apply mem_principal_ideal,
+  have z1 := Z ⟨ X, ⟨ _, forall_not_of_not_exists hX ⟩ ⟩ (quotient_to_ideal.contains _ _),
+  left,
+    apply set.mem_of_mem_of_subset _ z1,
+    apply quotient_to_ideal.is_ideal,
+    apply mem_principal_ideal,
+  specialize hz ⟨ h1, this ⟩ ,
+  apply h2 0,
+  simpa [monoid.pow, one_mul] using hz
+end
+
+-- Proposition 1.8 end
