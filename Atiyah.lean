@@ -2,6 +2,24 @@ import algebra.ring algebra.field data.set.basic order.zorn tactic.norm_num
 
 universes u v w
 
+section set_rewrite
+
+variable {α : Type u}
+
+theorem eq_of_mem_singleton {x y : α} (h : x ∈ ({y} : set α)) : x = y :=
+or.cases_on h id false.elim
+
+@[simp] theorem mem_singleton (a : α) : a ∈ ({a} : set α) :=
+or.inl rfl
+
+theorem mem_singleton_of_eq {x y : α} (H : x = y) : x ∈ ({y} : set α) :=
+or.inl H
+
+@[simp] theorem mem_singleton_iff (a b : α) : a ∈ ({b} : set α) ↔ a = b :=
+⟨ eq_of_mem_singleton, mem_singleton_of_eq ⟩
+
+end set_rewrite
+
 -- page 1
 
 class zero_ring (α : Type u) [comm_ring α] : Prop :=
@@ -221,9 +239,9 @@ end is_ideal
 
 @[reducible] def zero_ideal (α : Type u) [comm_ring α] : set α := {(0:α)}
 instance zero_ideal.is_ideal (α : Type u) [comm_ring α] : is_ideal α $ zero_ideal α :=
-{ zero_mem := set.mem_singleton 0,
-  add_mem  := λ x y hx hy, begin simp [set.mem_singleton_iff] at *, simp [hx, hy] end,
-  mul_mem  := λ x y hx, begin simp [set.mem_singleton_iff] at *, simp [hx] end }
+{ zero_mem := mem_singleton 0,
+  add_mem  := λ x y hx hy, begin simp [mem_singleton_iff] at *, simp [hx, hy] end,
+  mul_mem  := λ x y hx, begin simp [mem_singleton_iff] at *, simp [hx] end }
 
 @[reducible] def univ_ideal (α : Type u) [comm_ring α] : set α := set.univ
 instance univ_ideal.is_ideal (α : Type u) [comm_ring α] : is_ideal α $ univ_ideal α :=
@@ -404,9 +422,9 @@ def nilpotent {α : Type u} [comm_ring α] (x : α) := ∃ n, x^(nat.succ n) = 0
 
 section principal_ideal
 
-variables {α : Type u} [comm_ring α] (x : α)
+variables {α : Type u} [comm_ring α] (x y : α)
 
-def principal_ideal := { y | ∃ z, x * z = y }
+def principal_ideal : set α := { y | ∃ z, x * z = y }
 
 instance principal_ideal.is_ideal : is_ideal α $ principal_ideal x :=
 { zero_mem := ⟨0, mul_zero x⟩,
@@ -433,10 +451,16 @@ theorem unit_iff_principal_ideal_eq_one : (∃ y, x * y = 1) ↔ principal_ideal
     exact this
   end ⟩
 
+theorem mem_principal_ideal : x ∈ principal_ideal x :=
+⟨ 1, mul_one x ⟩
+
+theorem principal_ideal.subset_of_mem : x ∈ principal_ideal y → principal_ideal x ⊆ principal_ideal y :=
+λ ⟨ n, hn ⟩ z ⟨ w, hw ⟩ , ⟨ n * w, by rw [←hw, ←hn]; ac_refl ⟩
+
 variable (α)
 
 theorem principal_ideal_zero_eq_zero_ideal : principal_ideal (0:α) = zero_ideal α :=
-set.ext $ λ x, ⟨ λ ⟨y, hy⟩, by rw [←hy]; simp [zero_mul], λ hx, ⟨0, by rw [set.eq_of_mem_singleton hx, zero_mul] ⟩ ⟩
+set.ext $ λ x, ⟨ λ ⟨y, hy⟩, by rw [←hy]; simp [zero_mul], λ hx, ⟨0, by rw [eq_of_mem_singleton hx, zero_mul] ⟩ ⟩
 
 end principal_ideal
 
@@ -490,13 +514,13 @@ begin
   split,
   intro hx,
   unfold zero_ideal,
-  apply set.mem_singleton_of_eq,
+  apply mem_singleton_of_eq,
   apply @of_not_not _ (classical.prop_decidable _),
   intro hnx,
   exact h ⟨ x, hnx, hx ⟩,
   intro hx,
   unfold zero_ideal at hx,
-  rw set.mem_singleton_iff at hx,
+  rw mem_singleton_iff at hx,
   rw hx,
   exact is_ideal.zero_mem S
 end
@@ -541,8 +565,7 @@ begin
   apply hx,
   apply h,
   apply (is_ideal.zero _ _).1,
-  existsi (1:α),
-  simp,
+  exact mem_principal_ideal x,
   exact zero_ne_one
 end
 
@@ -625,7 +648,7 @@ begin
   left,
     apply set.ext,
     intro x,
-    rw set.mem_singleton_iff,
+    rw mem_singleton_iff,
     cases is_ideal.coset_rep x with y hy,
     rw ←hy at *,
     specialize h y,
@@ -685,7 +708,7 @@ def quotient_zero_isomorphism : α/(zero_ideal α) ≅ α :=
     begin
       intros x y hxy,
       change x - y ∈ {(0:α)} at hxy,
-      rw set.mem_singleton_iff at hxy,
+      rw mem_singleton_iff at hxy,
       exact sub_eq_zero.1 hxy
     end,
   g := is_ideal.to_coset (zero_ideal α),
@@ -944,8 +967,7 @@ begin
   existsi hm,
   split, exact z.1,
   apply set.mem_of_mem_of_subset _ z.2,
-  existsi (1:α),
-  exact mul_one x
+  exact mem_principal_ideal x
 end
 
 -- Corollary 1.5 end
@@ -970,7 +992,7 @@ begin
   split,
   intro hy,
   specialize hy (principal_ideal x),
-  specialize hy (λ z hz, begin simp at hz, rw hz, existsi (1:α), exact mul_one x end),
+  specialize hy (λ z hz, begin simp at hz, rw hz, exact mem_principal_ideal x end),
   exact hy,
   intros h T ht hst,
   simp at hst,
@@ -1058,3 +1080,59 @@ begin
 end
 
 -- Proposition 1.6 end
+
+
+class is_pid (α : Type u) [comm_ring α] extends is_integral_domain α : Prop :=
+(h : ∀ S [is_ideal α S], ∃ x, S = principal_ideal x)
+
+instance maximal_of_pid_of_prime_of_nonzero (α : Type u) [comm_ring α] [is_pid α]
+(S : set α) [is_ideal α S] [is_prime_ideal S] : S ≠ zero_ideal α → is_maximal_ideal S :=
+begin
+  intro h,
+  constructor,
+  apply is_prime_ideal.not_univ_ideal,
+  intros T _ hst,
+  have p := is_pid.h,
+  cases p S with s hs,
+  cases p T with t ht,
+  have h1 : s ∈ T,
+    apply set.mem_of_mem_of_subset _ hst,
+    simp [hs, mem_principal_ideal],
+  rw ht at h1,
+  cases h1 with z hz,
+  clear p,
+  have p := is_prime_ideal.mem_or_mem_of_mul_mem,
+  have h1 : s ∈ S,
+    simp [hs, mem_principal_ideal],
+  rw ←hz at h1,
+  specialize p h1,
+  cases p,
+  left,
+    apply set.eq_of_subset_of_subset,
+    rw [hs, ht],
+    apply principal_ideal.subset_of_mem,
+    rwa hs at p,
+    exact hst,
+  right,
+    rw [univ_ideal, ←principal_ideal_one_eq_univ],
+    rw [ht, ←unit_iff_principal_ideal_eq_one],
+    rw hs at p,
+    cases p with n hn,
+    have p := is_integral_domain.eq_zero_or_eq_zero_of_mul_eq_zero z (t * n - 1),
+    have : z * (t * n - 1) = 0 := calc
+      z * (t * n - 1) = z * (t * n) - z * 1 : mul_sub z (t * n) 1
+                  ... = (t * z) * n - z : by norm_num; ac_refl
+                  ... = s * n - z : congr_arg (λ b, b * n - z) hz
+                  ... = z - z : congr_arg (λ b, b - z) hn
+                  ... = 0 : sub_self z,
+    specialize p this,
+    cases p,
+    rw [p, mul_zero] at hz,
+    exfalso,
+    apply h,
+    rw [hs, ←hz],
+    apply principal_ideal_zero_eq_zero_ideal,
+    rw sub_eq_zero at p,
+    exact ⟨ n, p ⟩,
+    repeat {assumption}
+end
