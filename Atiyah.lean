@@ -314,7 +314,7 @@ variables {α : Type u} {β : Type v} [comm_ring α] [comm_ring β] (f : α → 
 @[reducible] def ker : set α := f⁻¹' (zero_ideal β)
 instance ker.is_ideal : is_ideal α (ker f) := is_ideal.hom_preimage f $ zero_ideal β
 
-@[reducible] def im : set β := {y | ∃ x, f x = y}
+@[reducible] def im : set β := { y | ∃ x, f x = y }
 instance im.subring : subring β (im f) :=
 { add_mem := λ x y ⟨ m, hm ⟩ ⟨ n, hn ⟩, ⟨ m + n, by simp [map_add f, hm, hn] ⟩,
   neg_mem := λ x ⟨ m, hm ⟩, ⟨-m, by simp [map_neg f, hm]⟩,
@@ -406,7 +406,7 @@ section principal_ideal
 
 variables {α : Type u} [comm_ring α] (x : α)
 
-def principal_ideal := {y | ∃ z, x * z = y}
+def principal_ideal := { y | ∃ z, x * z = y }
 
 instance principal_ideal.is_ideal : is_ideal α $ principal_ideal x :=
 { zero_mem := ⟨0, mul_zero x⟩,
@@ -780,7 +780,7 @@ section prop_1_3
 
 variables (α : Type u) [comm_ring α]
 
-def ideals : set (set α) := {S | is_ideal α S}
+def ideals : set (set α) := { S | is_ideal α S }
 
 instance ideals.sUnion (A : set (set α)) (h : A ⊆ ideals α) (S : set α) (hs : S ∈ A)
 (total : ∀ {T₁ T₂ : set α}, T₁ ∈ A → T₂ ∈ A → T₁ ⊆ T₂ ∨ T₂ ⊆ T₁) : ⋃₀ A ∈ ideals α :=
@@ -792,7 +792,7 @@ instance ideals.sUnion (A : set (set α)) (h : A ⊆ ideals α) (S : set α) (hs
   mul_mem  := λ x y ⟨ T₁, ht₁, hx ⟩,
     ⟨ T₁, ht₁, @is_ideal.mul_mem _ _ T₁ (h ht₁) x y hx ⟩ }
 
-def ideals_not_univ : set (set α) := {S | is_ideal α S ∧ (1:α) ∉ S }
+def ideals_not_univ : set (set α) := { S | is_ideal α S ∧ (1:α) ∉ S }
 
 theorem ideals_not_univ.sUnion (A : set (set α)) (h : A ⊆ ideals_not_univ α) (S : set α) (hs : S ∈ A)
 (total : ∀ {T₁ T₂ : set α}, T₁ ∈ A → T₂ ∈ A → T₁ ⊆ T₂ ∨ T₂ ⊆ T₁) : ⋃₀ A ∈ ideals_not_univ α :=
@@ -919,3 +919,142 @@ begin
 end
 
 -- Corollary 1.4 end
+
+
+-- Corollary 1.5 start
+
+theorem not_unit.to_maximal_ideal {α : Type u} [comm_ring α] (x : α) (h : ¬∃ y, x * y = 1) :
+∃ (m : set α) (hm : is_ideal α m), @is_maximal_ideal _ _ m hm ∧ x ∈ m :=
+begin
+  have z := ideals_not_univ.to_maximal_ideal (principal_ideal x),
+  specialize z
+    (begin
+      split,
+      exact principal_ideal.is_ideal x,
+      intro hx,
+      have := is_ideal.eq_univ_of_contains_one _ hx,
+      apply h,
+      apply (unit_iff_principal_ideal_eq_one x).2,
+      rw this,
+      rw principal_ideal_one_eq_univ
+    end),
+  cases z with m z,
+  cases z with hm z,
+  existsi m,
+  existsi hm,
+  split, exact z.1,
+  apply set.mem_of_mem_of_subset _ z.2,
+  existsi (1:α),
+  exact mul_one x
+end
+
+-- Corollary 1.5 end
+
+
+class is_local (α : Type u) [comm_ring α] : Prop :=
+(h : ∀ S T [is_ideal α S] [is_ideal α T] [is_maximal_ideal S] [is_maximal_ideal T], S = T)
+
+def generate {α : Type u} [comm_ring α] (S : set α) : set α :=
+{ x | ∀ (T : set α) [is_ideal α T], S ⊆ T → x ∈ T }
+
+instance generate.is_ideal (α : Type u) [comm_ring α] (S : set α) : is_ideal α (generate S) :=
+{ zero_mem := λ T ht hst, @@is_ideal.zero_mem _ T ht,
+  add_mem  := λ x y hx hy T ht hst, @@is_ideal.add_mem _ ht (@hx T ht hst) (@hy T ht hst),
+  mul_mem  := λ x y hx T ht hst, @@is_ideal.mul_mem _ ht (@hx T ht hst) }
+
+theorem singleton_generate_principal (α : Type u) [comm_ring α] (x : α) :
+generate {x} = principal_ideal x :=
+begin
+  apply set.ext,
+  intro y,
+  split,
+  intro hy,
+  specialize hy (principal_ideal x),
+  specialize hy (λ z hz, begin simp at hz, rw hz, existsi (1:α), exact mul_one x end),
+  exact hy,
+  intros h T ht hst,
+  simp at hst,
+  cases h with z hz,
+  rw ←hz,
+  exact is_ideal.mul_mem hst
+end
+
+theorem subset_generate {α : Type u} [comm_ring α] (S : set α) : S ⊆ generate S :=
+λ x hx T ht hst, hst hx
+
+theorem generate_subset_ideal {α : Type u} [comm_ring α] {S : set α} {T : set α} [is_ideal α T] : S ⊆ T → generate S ⊆ T :=
+λ h x hx, hx T h
+
+-- Proposition 1.6 start
+
+theorem nonunits_ideal_to_local {α : Type u} [comm_ring α] :
+is_ideal α { x | ¬∃ y, x * y = 1 } → is_local α :=
+begin
+  intro h,
+  constructor,
+  intros S T _ _ _ _,
+  let U := { x : α | ¬∃ y, x * y = 1 },
+  have h1 : S ⊆ U,
+    intros x hx h,
+    apply is_maximal_ideal.not_univ_ideal S,
+    apply is_ideal.eq_univ_of_contains_unit S,
+    exact ⟨ x, hx, h ⟩,
+  have h2 := is_maximal_ideal.no_between U h1,
+  cases h2,
+  have h3 : T ⊆ U,
+    intros x hx h,
+    apply is_maximal_ideal.not_univ_ideal T,
+    apply is_ideal.eq_univ_of_contains_unit T,
+    exact ⟨ x, hx, h ⟩,
+  have h4 := is_maximal_ideal.no_between U h3,
+  cases h4,
+  rwa [←h2, ←h4],
+  exfalso,
+  have : (1:α) ∈ U, rw h4, trivial,
+  simp at this,
+  apply this 1,
+  trivial,
+  exfalso,
+  have : (1:α) ∈ U, rw h2, trivial,
+  simp at this,
+  apply this 1,
+  trivial,
+end
+
+theorem maximal_ideal_one_add_unit_to_local {α : Type u} [comm_ring α]
+(m : set α) [is_ideal α m] [is_maximal_ideal m] :
+(∀ x:α, x ∈ m → ∃ y, (1 + x) * y = 1) → is_local α :=
+begin
+  intro h,
+  have z := nonunits_ideal_to_local,
+  have : m = { x | ¬∃ y, x * y = 1 },
+  apply set.ext,
+  intro x,
+  split,
+  intros hx h,
+  apply is_maximal_ideal.not_univ_ideal m,
+  apply is_ideal.eq_univ_of_contains_unit m,
+  exact ⟨ x, hx, h ⟩ ,
+  intro hx,
+  let β := α/m,
+  let y := ⟦x⟧,
+  have : is_field β,
+  rwa ←maximal_iff_quotient_field,
+  cases classical.em (y = 0) with h1 h1,
+  rwa ←is_ideal.zero at h1,
+  cases is_field.h h1 with n hn,
+  cases (quotient.exists_rep n) with w hw,
+  rw ←hw at hn,
+  have := quotient.exact hn,
+  specialize h _ this,
+  clear h1, clear hn, clear y,
+  cases h with y hy,
+  exfalso,
+  apply hx,
+  existsi w * y,
+  rwa [add_comm,sub_add_cancel,mul_assoc] at hy,
+  rw this at _inst_2,
+  exact z _inst_2
+end
+
+-- Proposition 1.6 end
