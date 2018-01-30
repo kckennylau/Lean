@@ -1436,12 +1436,12 @@ set.ext $ λ x,
 
 end closure
 
-
 namespace is_ideal
 
 section operations_on_ideals
 
-variables {α : Type u} [comm_ring α] (S S₁ S₂ S₃ : set α) [is_ideal α S] [is_ideal α S₁] [is_ideal α S₂] [is_ideal α S₃]
+variables {α : Type u} [comm_ring α] (S S₁ S₂ S₃ S₄ : set α)
+variables [is_ideal α S] [is_ideal α S₁] [is_ideal α S₂] [is_ideal α S₃] [is_ideal α S₄]
 
 @[reducible] def add : set α :=
 { x | ∃ y z, y ∈ S₁ ∧ z ∈ S₂ ∧ x = y + z }
@@ -1480,6 +1480,14 @@ instance sInter.is_ideal (S : set $ set α) (h : ∀ A, A ∈ S → is_ideal α 
   add_mem  := λ x y hx hy A ha, @@add_mem _ (h A ha) (hx A ha) (hy A ha),
   mul_mem  := λ x y hx A ha, @@mul_mem _ (h A ha) (hx A ha) }
 
+variables {S₁ S₂ S₃ S₄}
+
+theorem mem_add {x y : α} : x ∈ S₁ → y ∈ S₂ → x + y ∈ S₁ + S₂ :=
+λ hx hy, ⟨ x, y, hx, hy, rfl ⟩
+
+theorem mem_mul {x y : α} : x ∈ S₁ → y ∈ S₂ → x * y ∈ S₁ * S₂ :=
+λ hx hy, subset_generate _ ⟨ x, y, hx, hy, rfl ⟩
+
 theorem add_comm : S₁ + S₂ = S₂ + S₁ :=
 set.ext $ λ x, ⟨
   λ ⟨ y, z, hy, hz, hx ⟩ , ⟨ z, y, hz, hy, add_comm y z ▸ hx ⟩ ,
@@ -1498,6 +1506,17 @@ set.ext $ λ x, ⟨
   λ ⟨ pq, r, ⟨ p, q, hp, hq, hpq ⟩ , hr, hx ⟩ , ⟨ p, q + r, hp, ⟨ q, r, hq, hr, rfl ⟩ , add_assoc p q r ▸ hpq ▸ hx ⟩ ,
   λ ⟨ p, qr, hp, ⟨ q, r, hq, hr, hqr ⟩ , hx ⟩ , ⟨ p + q, r, ⟨ p, q, hp, hq, rfl ⟩ , hr, (add_assoc p q r).symm ▸ hqr ▸ hx ⟩ ⟩
 
+theorem subset_add_left : S₁ ⊆ S₁ + S₂ :=
+λ x hx, ⟨ x, 0, hx, is_ideal.zero_mem S₂, eq.symm $ add_zero x ⟩
+
+theorem subset_add_right : S₂ ⊆ S₁ + S₂ :=
+λ x hx, ⟨ 0, x, is_ideal.zero_mem S₁, hx, eq.symm $ zero_add x ⟩
+
+theorem add_self : S₁ + S₁ = S₁ :=
+set.ext $ λ x,
+  ⟨ λ ⟨ y, z, hy, hz, hx ⟩ , set.mem_of_eq_of_mem hx $ is_ideal.add_mem hy hz,
+    λ hx, subset_add_left hx ⟩
+
 theorem mul_subset_left : S₁ * S₂ ⊆ S₁ :=
 λ x hx, hx S₁ $ λ z ⟨ p, q, hp, hq, hz ⟩ , calc
     z = p * q : hz
@@ -1508,6 +1527,45 @@ theorem mul_subset_right : S₁ * S₂ ⊆ S₂ :=
     z = p * q : hz
   ... = q * p : comm_ring.mul_comm p q
   ... ∈ S₂    : is_ideal.mul_mem hq
+
+theorem mul_subset_inter : S₁ * S₂ ⊆ S₁ ∩ S₂ :=
+λ x hx, ⟨ mul_subset_left hx, mul_subset_right hx ⟩
+
+theorem add_univ : S₁ + (univ_ideal α) = univ_ideal α :=
+set.ext $ λ x, ⟨ λ hx, trivial, λ hx, subset_add_right hx ⟩
+
+theorem univ_add : (univ_ideal α) + S₁ = univ_ideal α :=
+set.ext $ λ x, ⟨ λ hx, trivial, λ hx, subset_add_left hx ⟩
+
+theorem add_zero : S₁ + (zero_ideal α) = S₁ :=
+set.ext $ λ x,
+  ⟨ λ ⟨ y, z, hy, hz, hx ⟩ , by simp [zero_ideal] at hz; simp [hz] at hx; simpa [hx],
+    λ hx, subset_add_left hx ⟩
+
+theorem zero_add : (zero_ideal α) + S₁ = S₁ :=
+set.ext $ λ x,
+  ⟨ λ ⟨ y, z, hy, hz, hx ⟩ , by simp [zero_ideal] at hy; simp [hy] at hx; simpa [hx],
+    λ hx, subset_add_right hx ⟩
+
+theorem mul_univ : S₁ * (univ_ideal α) = S₁ :=
+set.ext $ λ x,
+  ⟨ λ hx, mul_subset_left hx,
+   λ hx S s hs, hs ⟨ x, 1, hx, trivial, eq.symm $ mul_one x ⟩ ⟩
+
+theorem univ_mul : (univ_ideal α) * S₁ = S₁ :=
+set.ext $ λ x,
+  ⟨ λ hx, mul_subset_right hx,
+   λ hx S s hs, hs ⟨ 1, x, trivial, hx, eq.symm $ one_mul x ⟩ ⟩
+
+theorem mul_zero : S₁ * (zero_ideal α) = zero_ideal α :=
+set.ext $ λ x,
+  ⟨ λ hx, hx (zero_ideal α) $ λ z ⟨ p, q, hp, hq, hz ⟩, by simp [zero_ideal] at *; simp [hz, hq],
+   λ hx, by simp [zero_ideal] at *; rw hx; exact is_ideal.zero_mem _ ⟩
+
+theorem zero_mul : (zero_ideal α) * S₁ = zero_ideal α :=
+set.ext $ λ x,
+  ⟨ λ hx, hx (zero_ideal α) $ λ z ⟨ p, q, hp, hq, hz ⟩, by simp [zero_ideal] at *; simp [hz, hp],
+   λ hx, by simp [zero_ideal] at *; rw hx; exact is_ideal.zero_mem _ ⟩
 
 theorem mul_assoc : (S₁ * S₂) * S₃ = S₁ * (S₂ * S₃) :=
 begin
@@ -1621,7 +1679,7 @@ begin
   cases hpy with hpyz hpyyz,
   exact ⟨ py, pz,
     ⟨ pyy, pyz, hpyy,
-      ⟨ pyz, 0, hpyz, is_ideal.zero_mem S₃, (add_zero pyz).symm ⟩ ,
+      ⟨ pyz, 0, hpyz, is_ideal.zero_mem S₃, (comm_ring.add_zero pyz).symm ⟩ ,
     hpyyz ⟩ ,
   hpyzp ⟩ ,
   specialize hz p hp,
@@ -1634,11 +1692,113 @@ begin
   cases hpz with hpzz hpzyz,
   exact ⟨ py, pz,
     ⟨ pzy, pzz, hpzy,
-      ⟨ 0, pzz, is_ideal.zero_mem S₂, hpzz, (zero_add pzz).symm ⟩ ,
+      ⟨ 0, pzz, is_ideal.zero_mem S₂, hpzz, (comm_ring.zero_add pzz).symm ⟩ ,
     hpzyz ⟩ ,
   hpyzp ⟩ ,
   rw [list.sum_append, hLy, hLz, hx]
 end
+
+theorem mul_add : S₁ * (S₂ + S₃) = (S₁ * S₂) + (S₁ * S₃) :=
+begin
+  apply set.eq_of_subset_of_subset,
+  intros x hx,
+  unfold mul at hx,
+  rw generate_eq_closure at hx,
+  cases hx with L hx,
+  revert x,
+  induction L,
+  intros x hx,
+  cases hx with hx hLx,
+  rw [←hLx, list.sum_nil],
+  exact is_ideal.zero_mem _,
+  intros x hx,
+  cases hx with hx hLx,
+  rw [←hLx, list.sum_cons],
+  apply is_ideal.add_mem,
+  specialize hx L_hd,
+  specialize hx (list.mem_cons_self L_hd L_tl),
+  cases hx with y hx,
+  cases hx with z hx,
+  cases hx with hx hyz,
+  cases hx with m hx,
+  cases hx with n hx,
+  cases hx with hm hx,
+  cases hx with hn hymn,
+  cases hn with ny hn,
+  cases hn with nz hn,
+  cases hn with hny hn,
+  cases hn with hnz hnyz,
+  rw hnyz at hymn,
+  rw hymn at hyz,
+  simp [mul_add, add_mul] at hyz,
+  rw ←hyz,
+  apply mem_add,
+  apply @@mul_mem _,
+  apply mem_mul hm hny,
+  apply @@mul_mem _,
+  apply mem_mul hm hnz,
+  apply L_ih,
+  split,
+  intros z hz,
+  apply hx,
+  exact list.mem_cons_of_mem L_hd hz,
+  refl,
+  apply mul_add_subset
+end
+
+theorem add_congr : S₁ = S₂ → S₃ = S₄ → S₁ + S₃ = S₂ + S₄ :=
+λ h12 h34, calc
+  S₁ + S₃ = S₂ + S₃ : @eq.subst _ (λ T, ∀ H:is_ideal α T, S₁ + S₃ = @@add _ T S₃ H _) S₁ S₂ h12 (λ H, rfl) _
+      ... = S₂ + S₄ : @eq.subst _ (λ T, ∀ H:is_ideal α T, S₂ + S₃ = @@add _ S₂ T _ H) S₃ S₄ h34 (λ H, rfl) _
+
+theorem add_mul : (S₁ + S₂) * S₃ = (S₁ * S₃) + (S₂ * S₃) :=
+calc
+  (S₁ + S₂) * S₃ = S₃ * (S₁ + S₂) : mul_comm
+             ... = (S₃ * S₁) + (S₃ * S₂) : mul_add
+             ... = (S₁ * S₃) + (S₂ * S₃) : add_congr mul_comm mul_comm
+
+theorem mul_congr : S₁ = S₂ → S₃ = S₄ → S₁ * S₃ = S₂ * S₄ :=
+λ h12 h34, calc
+  S₁ * S₃ = S₂ * S₃ : @eq.subst _ (λ T, ∀ H:is_ideal α T, S₁ * S₃ = @@mul _ T S₃ H _) S₁ S₂ h12 (λ H, rfl) _
+      ... = S₂ * S₄ : @eq.subst _ (λ T, ∀ H:is_ideal α T, S₂ * S₃ = @@mul _ S₂ T _ H) S₃ S₄ h34 (λ H, rfl) _
+
+theorem mul_subset_of_subset : S₂ ⊆ S₃ → S₁ * S₂ ⊆ S₁ * S₃ :=
+λ h x hx S s hs, @@hx S s $ λ z ⟨ p, q, hp, hq, hz ⟩ , hs ⟨ p, q, hp, h hq, hz ⟩
+
+theorem mul_subset_of_subset_of_subset : S₁ ⊆ S₂ → S₃ ⊆ S₄ → S₁ * S₃ ⊆ S₂ * S₄ :=
+λ h12 h34 x hx S s hs, @@hx S s $ λ z ⟨ p, q, hp, hq, hz ⟩ , hs ⟨ p, q, h12 hp, h34 hq, hz ⟩
+
+theorem add_subset : S₁ ⊆ S₃ → S₂ ⊆ S₃ → S₁ + S₂ ⊆ S₃ :=
+λ h13 h23 x ⟨ y, z, hy, hz, hx ⟩ , set.mem_of_eq_of_mem hx
+  $ add_mem (h13 hy) (h23 hz)
+
+theorem add_subset_of_subset_of_subset : S₁ ⊆ S₂ → S₃ ⊆ S₄ → S₁ + S₃ ⊆ S₂ + S₄ :=
+λ h12 h34 x ⟨ y, z, hy, hz, hx ⟩, set.mem_of_eq_of_mem hx
+  $ add_mem (subset_add_left $ h12 hy) (subset_add_right $ h34 hz)
+
+theorem add_mul_inter_subset_mul : (S₁ + S₂) * (S₁ ∩ S₂) ⊆ S₁ * S₂ :=
+calc
+  (S₁ + S₂) * (S₁ ∩ S₂) = S₁ * (S₁ ∩ S₂) + S₂ * (S₁ ∩ S₂) : add_mul
+                    ... ⊆ S₁ * S₂ + S₂ * S₁ : add_subset_of_subset_of_subset
+                                                (mul_subset_of_subset_of_subset (λ x, id) (λ x hx, hx.2))
+                                                (mul_subset_of_subset_of_subset (λ x, id) (λ x hx, hx.1))
+                    ... = S₁ * S₂ + S₁ * S₂ : add_congr rfl mul_comm
+                    ... = S₁ * S₂ : add_self
+
+variables (S₁ S₂)
+
+def coprime : Prop := S₁ + S₂ = principal_ideal 1
+
+variables {S₁ S₂}
+
+theorem inter_eq_mul_of_coprime : coprime S₁ S₂ → S₁ ∩ S₂ = S₁ * S₂ :=
+λ h, set.eq_of_subset_of_subset
+(calc
+  S₁ ∩ S₂ = (univ_ideal α) * (S₁ ∩ S₂) : univ_mul.symm
+      ... = (principal_ideal 1) * (S₁ ∩ S₂) : mul_congr (principal_ideal_one_eq_univ α).symm rfl
+      ... = (S₁ + S₂) * (S₁ ∩ S₂) : mul_congr h.symm rfl
+      ... ⊆ S₁ * S₂ : add_mul_inter_subset_mul)
+mul_subset_inter
 
 end operations_on_ideals
 
