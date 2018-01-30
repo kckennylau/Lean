@@ -1441,7 +1441,7 @@ namespace is_ideal
 
 section operations_on_ideals
 
-variables {α : Type u} [comm_ring α] (S₁ : set α) (S₂ : set α) (S₃ : set α) [is_ideal α S₁] [is_ideal α S₂] [is_ideal α S₃]
+variables {α : Type u} [comm_ring α] (S S₁ S₂ S₃ : set α) [is_ideal α S] [is_ideal α S₁] [is_ideal α S₂] [is_ideal α S₃]
 
 @[reducible] def add : set α :=
 { x | ∃ y z, y ∈ S₁ ∧ z ∈ S₂ ∧ x = y + z }
@@ -1591,6 +1591,53 @@ begin
       ... = (m * n) * p : congr_arg (λ z, z * p) hmny.symm
       ... = ((q * r) * n) * p : congr_arg (λ z, (z * n) * p) hL
       ... = p * q * n * r : by ac_refl ⟩
+end
+
+theorem mul_add_subset : (S₁ * S₂) + (S₁ * S₃) ⊆ S₁ * (S₂ + S₃) :=
+λ x ⟨ y, z, hy, hz, hx ⟩ ,
+begin
+  unfold mul at hy,
+  unfold mul at hz,
+  unfold mul,
+  rw generate_eq_closure at hy,
+  rw generate_eq_closure at hz,
+  rw generate_eq_closure,
+  cases hy with Ly hy,
+  cases hy with hy hLy,
+  cases hz with Lz hz,
+  cases hz with hz hLz,
+  existsi Ly ++ Lz,
+  split,
+  intros p hp,
+  rw list.mem_append at hp,
+  cases hp with hp hp,
+  specialize hy p hp,
+  cases hy with py hy,
+  cases hy with pz hy,
+  cases hy with hpy hpyzp,
+  cases hpy with pyy hpy,
+  cases hpy with pyz hpy,
+  cases hpy with hpyy hpy,
+  cases hpy with hpyz hpyyz,
+  exact ⟨ py, pz,
+    ⟨ pyy, pyz, hpyy,
+      ⟨ pyz, 0, hpyz, is_ideal.zero_mem S₃, (add_zero pyz).symm ⟩ ,
+    hpyyz ⟩ ,
+  hpyzp ⟩ ,
+  specialize hz p hp,
+  cases hz with py hz,
+  cases hz with pz hz,
+  cases hz with hpz hpyzp,
+  cases hpz with pzy hpz,
+  cases hpz with pzz hpz,
+  cases hpz with hpzy hpz,
+  cases hpz with hpzz hpzyz,
+  exact ⟨ py, pz,
+    ⟨ pzy, pzz, hpzy,
+      ⟨ 0, pzz, is_ideal.zero_mem S₂, hpzz, (zero_add pzz).symm ⟩ ,
+    hpzyz ⟩ ,
+  hpyzp ⟩ ,
+  rw [list.sum_append, hLy, hLz, hx]
 end
 
 end operations_on_ideals
