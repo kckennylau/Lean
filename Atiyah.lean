@@ -1332,3 +1332,267 @@ begin
 end
 
 -- Proposition 1.8 end
+
+
+def jacobson (α : Type u) [comm_ring α] : set α :=
+⋂₀ { S : set α | ∃ (h : is_ideal α S), @@is_maximal_ideal _ S h }
+
+-- Proposition 1.9 start
+
+theorem mem_jacobson_iff_multiple_add_one_unit {α : Type u} [comm_ring α]
+(x : α) : x ∈ jacobson α ↔ ∀ y, ∃ z, (1 + x * y) * z = 1 :=
+begin
+  split,
+  intros hx y,
+  apply @@of_not_not (classical.prop_decidable _),
+  intro h,
+  cases not_unit.to_maximal_ideal _ h with m hm,
+  cases hm with _inst_1 hm,
+  cases hm with _inst_2 hm,
+  specialize hx m ⟨ _inst_1, _inst_2 ⟩ ,
+  apply is_maximal_ideal.not_univ_ideal m,
+  apply is_ideal.eq_univ_of_contains_one m,
+  exact calc
+      1 = (1 + x * y) - x * y : eq.symm (add_sub_cancel _ _)
+    ... ∈ m : is_ideal.sub_mem hm (is_ideal.mul_mem hx),
+  intros h m hm,
+  cases hm with _inst_1 _inst_2,
+  apply @@of_not_not (classical.prop_decidable _),
+  intro hx,
+  have _inst_3 := (maximal_iff_quotient_field m).1 _inst_2,
+  rw is_ideal.zero m at hx,
+  cases is_field.h hx with y hy,
+  cases is_ideal.coset_rep y with z hz,
+  rw [←hz, is_ideal.mul_coset] at hy,
+  apply is_maximal_ideal.not_univ_ideal m,
+  apply is_ideal.eq_univ_of_contains_unit m,
+  existsi x * z - 1,
+  split,
+  exact quotient.exact hy,
+  cases h (-z) with w hw,
+  existsi -w,
+  exact calc
+    (x * z - 1) * -w = -(1 - x * z) * -w : congr_arg (λ b, b * -w) (neg_sub 1 $ x * z).symm
+                 ... = (1 - x * z) * w : neg_mul_neg (1 - x * z) w
+                 ... = (1 + -(x * z)) * w : eq.rec_on (sub_eq_add_neg 1 $ x * z) rfl
+                 ... = (1 + x * -z) * w : congr_arg (λ b, (1 + b) * w) (neg_mul_eq_mul_neg x z)
+                 ... = 1 : hw
+end
+
+-- Proposition 1.9 end
+
+theorem list.sum_singleton {α : Type u} [semiring α] (x : α) : list.sum [x] = x :=
+calc
+  list.sum [x] = x + list.sum list.nil : list.sum_cons
+           ... = x + 0                 : congr_arg _ list.sum_nil
+           ... = x                     : add_zero x
+
+theorem list.sum_mul {α : Type u} [semiring α] :
+∀ (L : list α) (x : α), (L.map (λ b, b * x)).sum = L.sum * x
+| [] x := by simp; rw [list.sum_nil]
+| (h::t) x := by simp [list.sum_mul t x, add_mul]
+
+section closure
+
+variables {α : Type u} [comm_ring α] (S : set α)
+
+@[reducible] def closure : set α := { x | ∃ L : list α, (∀ x, x ∈ L → ∃ y z, y ∈ S ∧ y * z = x) ∧ L.sum = x}
+
+instance closure.is_ideal : is_ideal α (closure S) :=
+{ zero_mem := ⟨ [], λ x, false.elim, list.sum_nil ⟩ ,
+  add_mem  := λ x y ⟨ Lx, ⟨ hxLS, hx ⟩ ⟩ ⟨ Ly, ⟨ hyLS, hy ⟩ ⟩ ,
+    ⟨ Lx ++ Ly,
+      λ z hz, or.cases_on (list.mem_append.1 hz) (λ hzx, hxLS z hzx) (λ hzy, hyLS z hzy),
+      hx ▸ hy ▸ list.sum_append ⟩ ,
+  mul_mem  := λ x y ⟨ Lx, ⟨ hxLS, hx ⟩ ⟩ ,
+    ⟨ Lx.map ( λ b, b * y ),
+      λ z hz , Exists.cases_on (list.exists_of_mem_map hz)
+        $ λ m ⟨ hm, hmyz ⟩ , Exists.cases_on (hxLS m hm)
+        $ λ n ⟨ p, hn, hnpm ⟩ , ⟨ n, p * y, hn, by rw [←mul_assoc, hnpm, hmyz] ⟩ ,
+      hx ▸ list.sum_mul Lx y ⟩ }
+
+theorem subset_closure : S ⊆ closure S :=
+λ z hz, ⟨ [z], λ y hy, ⟨ z, 1, hz,
+calc
+  z * 1 = z : mul_one z
+    ... = y : eq.symm $ list.mem_singleton.1 hy ⟩ ,
+list.sum_singleton z ⟩
+
+theorem is_ideal.sum_mem (T : set α) [is_ideal α T] : ∀ L : list α, (∀ x, x ∈ L → x ∈ T) → L.sum ∈ T
+| [] H := set.mem_of_eq_of_mem list.sum_nil $ is_ideal.zero_mem T
+| (h::t) H := set.mem_of_eq_of_mem list.sum_cons $ is_ideal.add_mem
+(H h $ list.mem_cons_self h t)
+(is_ideal.sum_mem t $ λ x hx, H x $ list.mem_cons_of_mem h hx)
+
+theorem mem_ideal_of_closure (T : set α) [is_ideal α T] (hst : S ⊆ T) :
+∀ L : list α , (∀ x, x ∈ L → ∃ y z, y ∈ S ∧ y * z = x) → L.sum ∈ T :=
+λ L H, is_ideal.sum_mem T L $ λ x hx, Exists.cases_on (H x hx)
+  $ λ y ⟨ z, hy, hyzx ⟩ , set.mem_of_eq_of_mem hyzx.symm $ is_ideal.mul_mem $ hst hy
+
+theorem generate_eq_closure : generate S = closure S :=
+set.ext $ λ x,
+⟨ λ hx, hx (closure S) (subset_closure S),
+ λ ⟨ L, hx, hLx ⟩ T ht hst, set.mem_of_eq_of_mem hLx.symm $ @@mem_ideal_of_closure _ S T ht hst L hx ⟩
+
+end closure
+
+
+namespace is_ideal
+
+section operations_on_ideals
+
+variables {α : Type u} [comm_ring α] (S₁ : set α) (S₂ : set α) (S₃ : set α) [is_ideal α S₁] [is_ideal α S₂] [is_ideal α S₃]
+
+@[reducible] def add : set α :=
+{ x | ∃ y z, y ∈ S₁ ∧ z ∈ S₂ ∧ x = y + z }
+
+infix + := add
+
+instance add.is_ideal : is_ideal α (S₁ + S₂) :=
+{ zero_mem := ⟨ 0, 0, zero_mem S₁, zero_mem S₂, by simp ⟩,
+  add_mem  := λ x₁ x₂ ⟨ y₁, z₁, hy₁, hz₁, hx₁ ⟩ ⟨ y₂, z₂, hy₂, hz₂, hx₂ ⟩,
+             ⟨ y₁ + y₂, z₁ + z₂, add_mem hy₁ hy₂, add_mem hz₁ hz₂, by simp [hx₁, hx₂] ⟩ ,
+  mul_mem  := λ x₁ x₂ ⟨ y, z, hy, hz, hx ⟩,
+             ⟨ y * x₂, z * x₂, mul_mem hy, mul_mem hz, by simp [hx, add_mul] ⟩ }
+
+theorem add_eq_generate_union : S₁ + S₂ = generate (S₁ ∪ S₂) :=
+set.ext $ λ x,
+⟨ λ ⟨ y, z, hy, hz, hx ⟩ S h hs , set.mem_of_eq_of_mem hx $ @@add_mem _ h (hs $ or.inl hy) (hs $ or.inr hz) ,
+  λ hx, hx (S₁ + S₂) $ λ p hp, or.cases_on hp
+    (λ hp1, ⟨ p, 0, hp1, zero_mem S₂, eq.symm $ add_zero p ⟩ )
+    (λ hp2, ⟨ 0, p, zero_mem S₁, hp2, eq.symm $ zero_add p ⟩ ) ⟩
+
+@[reducible] def mul : set α :=
+generate { x | ∃ y z, y ∈ S₁ ∧ z ∈ S₂ ∧ x = y * z}
+
+infix * := mul
+
+instance mul.is_ideal : is_ideal α (S₁ * S₂) :=
+generate.is_ideal α _
+
+instance inter.is_ideal : is_ideal α (S₁ ∩ S₂) :=
+{ zero_mem := ⟨ zero_mem S₁, zero_mem S₂ ⟩ ,
+  add_mem  := λ x y ⟨ hx1, hx2 ⟩ ⟨ hy1, hy2 ⟩ , ⟨ add_mem hx1 hy1, add_mem hx2 hy2 ⟩ ,
+  mul_mem  := λ x y ⟨ hx1, hx2 ⟩ , ⟨ mul_mem hx1, mul_mem hx2 ⟩ }
+
+instance sInter.is_ideal (S : set $ set α) (h : ∀ A, A ∈ S → is_ideal α A) : is_ideal α (⋂₀ S) :=
+{ zero_mem := λ A ha, @@zero_mem _ A (h A ha),
+  add_mem  := λ x y hx hy A ha, @@add_mem _ (h A ha) (hx A ha) (hy A ha),
+  mul_mem  := λ x y hx A ha, @@mul_mem _ (h A ha) (hx A ha) }
+
+theorem add_comm : S₁ + S₂ = S₂ + S₁ :=
+set.ext $ λ x, ⟨
+  λ ⟨ y, z, hy, hz, hx ⟩ , ⟨ z, y, hz, hy, add_comm y z ▸ hx ⟩ ,
+  λ ⟨ y, z, hy, hz, hx ⟩ , ⟨ z, y, hz, hy, add_comm y z ▸ hx ⟩ ⟩
+
+theorem mul_comm : S₁ * S₂ = S₂ * S₁ :=
+congr_arg generate $ set.ext
+begin
+  intro x,
+  exact ⟨ λ ⟨ y, z, hy, hz, hx ⟩ , ⟨ z, y, hz, hy, mul_comm y z ▸ hx ⟩ ,
+          λ ⟨ y, z, hy, hz, hx ⟩ , ⟨ z, y, hz, hy, mul_comm y z ▸ hx ⟩ ⟩
+end
+
+theorem add_assoc : (S₁ + S₂) + S₃ = S₁ + (S₂ + S₃) :=
+set.ext $ λ x, ⟨
+  λ ⟨ pq, r, ⟨ p, q, hp, hq, hpq ⟩ , hr, hx ⟩ , ⟨ p, q + r, hp, ⟨ q, r, hq, hr, rfl ⟩ , add_assoc p q r ▸ hpq ▸ hx ⟩ ,
+  λ ⟨ p, qr, hp, ⟨ q, r, hq, hr, hqr ⟩ , hx ⟩ , ⟨ p + q, r, ⟨ p, q, hp, hq, rfl ⟩ , hr, (add_assoc p q r).symm ▸ hqr ▸ hx ⟩ ⟩
+
+theorem mul_subset_left : S₁ * S₂ ⊆ S₁ :=
+λ x hx, hx S₁ $ λ z ⟨ p, q, hp, hq, hz ⟩ , calc
+    z = p * q : hz
+  ... ∈ S₁    : is_ideal.mul_mem hp
+
+theorem mul_subset_right : S₁ * S₂ ⊆ S₂ :=
+λ x hx, hx S₂ $ λ z ⟨ p, q, hp, hq, hz ⟩ , calc
+    z = p * q : hz
+  ... = q * p : comm_ring.mul_comm p q
+  ... ∈ S₂    : is_ideal.mul_mem hq
+
+theorem mul_assoc : (S₁ * S₂) * S₃ = S₁ * (S₂ * S₃) :=
+begin
+  apply set.ext,
+  intro x,
+  split,
+  intro hx,
+  apply hx (S₁ * (S₂ * S₃)),
+  intros z hz,
+  cases hz with pq hz,
+  cases hz with r hz,
+  cases hz with hpq hz,
+  cases hz with hr hz,
+  rw hz,
+  intros S _ hs,
+  unfold is_ideal.mul at hpq,
+  rw generate_eq_closure at hpq,
+  cases hpq with L hpq,
+  cases hpq with hL hLpq,
+  rw [←hLpq, ←list.sum_mul],
+  apply is_ideal.sum_mem,
+  intros x hx,
+  rw list.mem_map at hx,
+  cases hx with y hx,
+  cases hx with hyL hyrx,
+  apply hs,
+  specialize hL y hyL,
+  cases hL with m hL,
+  cases hL with n hL,
+  cases hL with hL hmny,
+  cases hL with p hL,
+  cases hL with q hL,
+  cases hL with hp hL,
+  cases hL with hq hL,
+  exact ⟨ p, (q * r) * n, hp,
+    ((set.set_eq_def _ _).1 (generate_eq_closure _) _).2
+      ⟨ [q * r * n],
+        λ z hz, ⟨ q * r, n, ⟨ q, r, hq, hr, rfl ⟩ , (list.mem_singleton.1 hz).symm ⟩ ,
+        list.sum_singleton (q * r * n) ⟩ ,
+    calc
+        x = y * r : hyrx.symm
+      ... = (m * n) * r : congr_arg (λ z, z * r) hmny.symm
+      ... = ((p * q) * n) * r : congr_arg (λ z, (z * n) * r) hL
+      ... = p * (q * r * n) : by ac_refl ⟩ ,
+  intro hx,
+  apply hx (S₁ * S₂ * S₃),
+  intros z hz,
+  cases hz with p hz,
+  cases hz with qr hz,
+  cases hz with hp hz,
+  cases hz with hqr hz,
+  rw hz,
+  intros S _ hs,
+  unfold is_ideal.mul at hqr,
+  rw generate_eq_closure at hqr,
+  cases hqr with L hqr,
+  cases hqr with hL hLqr,
+  rw [←hLqr, comm_ring.mul_comm, ←list.sum_mul],
+  apply is_ideal.sum_mem,
+  intros x hx,
+  rw list.mem_map at hx,
+  cases hx with y hx,
+  cases hx with hyL hypx,
+  apply hs,
+  specialize hL y hyL,
+  cases hL with m hL,
+  cases hL with n hL,
+  cases hL with hL hmny,
+  cases hL with q hL,
+  cases hL with r hL,
+  cases hL with hq hL,
+  cases hL with hr hL,
+  exact ⟨ (p * q) * n, r,
+    ((set.set_eq_def _ _).1 (generate_eq_closure _) _).2
+      ⟨ [p * q * n],
+        λ z hz, ⟨ p * q, n, ⟨ p, q, hp, hq, rfl ⟩ , (list.mem_singleton.1 hz).symm ⟩ ,
+        list.sum_singleton (p * q * n) ⟩ ,
+    hr,
+    calc
+        x = y * p : hypx.symm
+      ... = (m * n) * p : congr_arg (λ z, z * p) hmny.symm
+      ... = ((q * r) * n) * p : congr_arg (λ z, (z * n) * p) hL
+      ... = p * q * n * r : by ac_refl ⟩
+end
+
+end operations_on_ideals
+
+end is_ideal
