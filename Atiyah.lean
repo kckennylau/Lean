@@ -1803,3 +1803,110 @@ mul_subset_inter
 end operations_on_ideals
 
 end is_ideal
+
+def tuple : list Type.{u} → Type u
+ | [] := punit
+ | (t₀ :: []) := t₀
+ | (t₀ :: t₁ :: ts) := t₀ × tuple (t₁ :: ts)
+
+namespace product
+
+def add : Π L : list Σ t : Type.{u}, comm_ring t, tuple (list.map sigma.fst L) → tuple (list.map sigma.fst L) → tuple (list.map sigma.fst L)
+ | [] punit.star punit.star := punit.star
+ | (t₀ :: []) x₀ y₀ := @comm_ring.add t₀.1 t₀.2 x₀ y₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) (y₀, ys) := (@comm_ring.add t₀.1 t₀.2 x₀ y₀, add (t₁ :: ts) xs ys)
+
+theorem add_assoc : Π (L : list Σ t : Type.{u}, comm_ring t) (x y z : tuple (list.map sigma.fst L)), (add L (add L x y) z) = (add L x (add L y z))
+ | [] punit.star punit.star punit.star := rfl
+ | (t₀ :: []) x₀ y₀ z₀ := @comm_ring.add_assoc t₀.1 t₀.2 x₀ y₀ z₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) (y₀, ys) (z₀, zs) := prod.mk.inj_iff.2 ⟨ @comm_ring.add_assoc t₀.1 t₀.2 x₀ y₀ z₀, add_assoc (t₁ :: ts) xs ys zs ⟩
+
+def zero : Π L : list Σ t : Type.{u}, comm_ring t, tuple (list.map sigma.fst L)
+ | [] := punit.star
+ | (t₀ :: []) := @comm_ring.zero t₀.1 t₀.2
+ | (t₀ :: t₁ :: ts) := (@comm_ring.zero t₀.1 t₀.2, zero (t₁ :: ts))
+
+theorem zero_add : Π (L : list Σ t : Type.{u}, comm_ring t) (x : tuple (list.map sigma.fst L)), (add L (zero L) x) = x
+ | [] punit.star := rfl
+ | (t₀ :: []) x₀ := @comm_ring.zero_add t₀.1 t₀.2 x₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) := prod.mk.inj_iff.2 ⟨ @comm_ring.zero_add t₀.1 t₀.2 x₀, zero_add (t₁ :: ts) xs ⟩
+
+theorem add_zero : Π (L : list Σ t : Type.{u}, comm_ring t) (x : tuple (list.map sigma.fst L)), (add L x (zero L)) = x
+ | [] punit.star := rfl
+ | (t₀ :: []) x₀ := @comm_ring.add_zero t₀.1 t₀.2 x₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) := prod.mk.inj_iff.2 ⟨ @comm_ring.add_zero t₀.1 t₀.2 x₀, add_zero (t₁ :: ts) xs ⟩
+
+def neg : Π L : list Σ t : Type.{u}, comm_ring t, tuple (list.map sigma.fst L) → tuple (list.map sigma.fst L)
+ | [] punit.star := punit.star
+ | (t₀ :: []) x₀ := @comm_ring.neg t₀.1 t₀.2 x₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) := (@comm_ring.neg t₀.1 t₀.2 x₀, neg (t₁ :: ts) xs)
+
+theorem add_left_neg : Π (L : list Σ t : Type.{u}, comm_ring t) (x : tuple (list.map sigma.fst L)), (add L (neg L x) x) = zero L
+ | [] punit.star := rfl
+ | (t₀ :: []) x₀ := @comm_ring.add_left_neg t₀.1 t₀.2 x₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) := prod.mk.inj_iff.2 ⟨ @comm_ring.add_left_neg t₀.1 t₀.2 x₀, add_left_neg (t₁ :: ts) xs ⟩
+
+theorem add_comm : Π (L : list Σ t : Type.{u}, comm_ring t) (x y : tuple (list.map sigma.fst L)), add L x y = add L y x
+ | [] punit.star punit.star := rfl
+ | (t₀ :: []) x₀ y₀ := @comm_ring.add_comm t₀.1 t₀.2 x₀ y₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) (y₀, ys) := prod.mk.inj_iff.2 ⟨ (@comm_ring.add_comm t₀.1 t₀.2 x₀ y₀), (add_comm (t₁ :: ts) xs ys) ⟩
+
+def mul : Π L : list Σ t : Type.{u}, comm_ring t, tuple (list.map sigma.fst L) → tuple (list.map sigma.fst L) → tuple (list.map sigma.fst L)
+ | [] punit.star punit.star := punit.star
+ | (t₀ :: []) x₀ y₀ := @comm_ring.mul t₀.1 t₀.2 x₀ y₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) (y₀, ys) := (@comm_ring.mul t₀.1 t₀.2 x₀ y₀, mul (t₁ :: ts) xs ys)
+
+theorem mul_assoc : Π (L : list Σ t : Type.{u}, comm_ring t) (x y z : tuple (list.map sigma.fst L)), (mul L (mul L x y) z) = (mul L x (mul L y z))
+ | [] punit.star punit.star punit.star := rfl
+ | (t₀ :: []) x₀ y₀ z₀ := @comm_ring.mul_assoc t₀.1 t₀.2 x₀ y₀ z₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) (y₀, ys) (z₀, zs) := prod.mk.inj_iff.2 ⟨ @comm_ring.mul_assoc t₀.1 t₀.2 x₀ y₀ z₀, mul_assoc (t₁ :: ts) xs ys zs ⟩
+
+def one : Π L : list Σ t : Type.{u}, comm_ring t, tuple (list.map sigma.fst L)
+ | [] := punit.star
+ | (t₀ :: []) := @comm_ring.one t₀.1 t₀.2
+ | (t₀ :: t₁ :: ts) := (@comm_ring.one t₀.1 t₀.2, one (t₁ :: ts))
+
+theorem one_mul : Π (L : list Σ t : Type.{u}, comm_ring t) (x : tuple (list.map sigma.fst L)), (mul L (one L) x) = x
+ | [] punit.star := rfl
+ | (t₀ :: []) x₀ := @comm_ring.one_mul t₀.1 t₀.2 x₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) := prod.mk.inj_iff.2 ⟨ @comm_ring.one_mul t₀.1 t₀.2 x₀, one_mul (t₁ :: ts) xs ⟩
+
+theorem mul_one : Π (L : list Σ t : Type.{u}, comm_ring t) (x : tuple (list.map sigma.fst L)), (mul L x (one L)) = x
+ | [] punit.star := rfl
+ | (t₀ :: []) x₀ := @comm_ring.mul_one t₀.1 t₀.2 x₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) := prod.mk.inj_iff.2 ⟨ @comm_ring.mul_one t₀.1 t₀.2 x₀, mul_one (t₁ :: ts) xs ⟩
+
+theorem left_distrib : Π (L : list Σ t : Type.{u}, comm_ring t) (x y z : tuple (list.map sigma.fst L)), (mul L x (add L y z)) = add L (mul L x y) (mul L x z)
+ | [] punit.star punit.star punit.star := rfl
+ | (t₀ :: []) x₀ y₀ z₀ := @comm_ring.left_distrib t₀.1 t₀.2 x₀ y₀ z₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) (y₀, ys) (z₀, zs) := prod.mk.inj_iff.2 ⟨ @comm_ring.left_distrib t₀.1 t₀.2 x₀ y₀ z₀, left_distrib (t₁ :: ts) xs ys zs ⟩
+
+theorem right_distrib : Π (L : list Σ t : Type.{u}, comm_ring t) (x y z : tuple (list.map sigma.fst L)), (mul L (add L x y) z) = add L (mul L x z) (mul L y z)
+ | [] punit.star punit.star punit.star := rfl
+ | (t₀ :: []) x₀ y₀ z₀ := @comm_ring.right_distrib t₀.1 t₀.2 x₀ y₀ z₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) (y₀, ys) (z₀, zs) := prod.mk.inj_iff.2 ⟨ @comm_ring.right_distrib t₀.1 t₀.2 x₀ y₀ z₀, right_distrib (t₁ :: ts) xs ys zs ⟩
+
+theorem mul_comm : Π (L : list Σ t : Type.{u}, comm_ring t) (x y : tuple (list.map sigma.fst L)), mul L x y = mul L y x
+ | [] punit.star punit.star := rfl
+ | (t₀ :: []) x₀ y₀ := @comm_ring.mul_comm t₀.1 t₀.2 x₀ y₀
+ | (t₀ :: t₁ :: ts) (x₀, xs) (y₀, ys) := prod.mk.inj_iff.2 ⟨ (@comm_ring.mul_comm t₀.1 t₀.2 x₀ y₀), (mul_comm (t₁ :: ts) xs ys) ⟩
+
+instance (L : list Σ t : Type.{u}, comm_ring t) : comm_ring $ tuple (list.map sigma.fst L) :=
+{ add            := add L,
+  add_assoc      := add_assoc L,
+  zero           := zero L,
+  zero_add       := zero_add L,
+  add_zero       := add_zero L,
+  neg            := neg L,
+  add_left_neg   := add_left_neg L,
+  add_comm       := add_comm L,
+  mul            := mul L,
+  mul_assoc      := mul_assoc L,
+  one            := one L,
+  one_mul        := one_mul L,
+  mul_one        := mul_one L,
+  left_distrib   := left_distrib L,
+  right_distrib  := right_distrib L,
+  mul_comm       := mul_comm L }
+
+end product
