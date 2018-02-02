@@ -1,4 +1,4 @@
-import tactic.ring
+import data.set.basic tactic.ring
 
 universe u
 
@@ -12,66 +12,54 @@ class is_submonoid : Prop :=
 
 variable [is_submonoid α S]
 
-def r : α × {s // s ∈ S} → α × {s // s ∈ S} → Prop :=
-λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩, ∃ t ∈ S, t * (r₁ * s₂ - r₂ * s₁) = 0
-
-theorem refl : ∀ (x : α × {s // s ∈ S}), r α S x x :=
-λ ⟨r₁, s₁, hs₁⟩, ⟨1, is_submonoid.one_mem S, by simp⟩
-
-theorem symm : ∀ (x y : α × {s // s ∈ S}), r α S x y → r α S y x :=
-λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨t, hts, ht⟩, ⟨t, hts, calc
-        t * (r₂ * s₁ - r₁ * s₂)
-      = -(t * (r₁ * s₂ - r₂ * s₁)) : by ring
-  ... = 0 : by rw ht; simp⟩
-
-theorem trans : ∀ (x y z : α × {s // s ∈ S}), r α S x y → r α S y z → r α S x z :=
-λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨t, hts, ht⟩ ⟨t', hts', ht'⟩,
-⟨t * t' * s₂, is_submonoid.mul_mem (is_submonoid.mul_mem hts hts') hs₂, calc
-         t * t' * s₂ * (r₁ * s₃ - r₃ * s₁)
-       = t' * s₃ * (t * (r₁ * s₂ - r₂ * s₁)) + t * s₁ * (t' * (r₂ * s₃ - r₃ * s₂)) : by ring
-   ... = 0 : by rw [ht, ht']; simp⟩
-
-instance : setoid (α × {s // s ∈ S}) :=
-⟨r α S, refl α S, symm α S, trans α S⟩
+instance : setoid (α × S) :=
+{ r     := λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩, ∃ t ∈ S, t * (r₁ * s₂ - r₂ * s₁) = 0,
+  iseqv := ⟨λ ⟨r₁, s₁, hs₁⟩, ⟨1, is_submonoid.one_mem S, by simp⟩,
+    λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨t, hts, ht⟩,
+    ⟨t, hts, calc
+             t * (r₂ * s₁ - r₁ * s₂)
+           = -(t * (r₁ * s₂ - r₂ * s₁)) : by ring
+       ... = 0 : by rw ht; simp⟩,
+    λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨t, hts, ht⟩ ⟨t', hts', ht'⟩,
+    ⟨t * t' * s₂, is_submonoid.mul_mem (is_submonoid.mul_mem hts hts') hs₂, calc
+             t * t' * s₂ * (r₁ * s₃ - r₃ * s₁)
+           = t' * s₃ * (t * (r₁ * s₂ - r₂ * s₁)) + t * s₁ * (t' * (r₂ * s₃ - r₃ * s₂)) : by ring
+       ... = 0 : by rw [ht, ht']; simp⟩⟩ }
 
 def loc := quotient $ loc.setoid α S
 
-def pre_add : α × {s // s ∈ S} → α × {s // s ∈ S} → loc α S :=
+def add_aux : α × S → α × S → loc α S :=
 λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩, ⟦⟨r₁ * s₂ + r₂ * s₁, s₁ * s₂, is_submonoid.mul_mem hs₁ hs₂⟩⟧
 
 def add : loc α S → loc α S → loc α S :=
-quotient.lift₂ (pre_add α S)
-(λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨r₄, s₄, hs₄⟩ ⟨t₅, hts₅, ht₅⟩ ⟨t₆, hts₆, ht₆⟩, quotient.sound
- ⟨t₅ * t₆, is_submonoid.mul_mem hts₅ hts₆, calc
-          t₅ * t₆ * ((r₁ * s₂ + r₂ * s₁) * (s₃ * s₄) - (r₃ * s₄ + r₄ * s₃) * (s₁ * s₂))
-        = t₆ * (t₅ * (r₁ * s₃ - r₃ * s₁)) * s₂ * s₄ + t₅ * (t₆ * (r₂ * s₄ - r₄ * s₂)) * s₁ * s₃ : by ring
-    ... = 0 : by rw [ht₅, ht₆]; simp ⟩)
+quotient.lift₂ (add_aux α S) $
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨r₄, s₄, hs₄⟩ ⟨t₅, hts₅, ht₅⟩ ⟨t₆, hts₆, ht₆⟩,
+quotient.sound ⟨t₅ * t₆, is_submonoid.mul_mem hts₅ hts₆, calc
+        t₅ * t₆ * ((r₁ * s₂ + r₂ * s₁) * (s₃ * s₄) - (r₃ * s₄ + r₄ * s₃) * (s₁ * s₂))
+      = t₆ * (t₅ * (r₁ * s₃ - r₃ * s₁)) * s₂ * s₄ + t₅ * (t₆ * (r₂ * s₄ - r₄ * s₂)) * s₁ * s₃ : by ring
+  ... = 0 : by rw [ht₅, ht₆]; simp⟩
 
-def zero : loc α S := ⟦⟨0, 1, is_submonoid.one_mem S⟩⟧
-
-def pre_neg : α × {s // s ∈ S} → loc α S :=
+def neg_aux : α × S → loc α S :=
 λ ⟨r, s, hs⟩, ⟦⟨-r, s, hs⟩⟧
 
 def neg : loc α S → loc α S :=
-quotient.lift (pre_neg α S)
-(λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨t, hts, ht⟩, quotient.sound
- ⟨t, hts, calc
-          t * (-r₁ * s₂ - -r₂ * s₁)
-        = -(t * (r₁ * s₂ - r₂ * s₁)) : by ring
-    ... = 0 : by rw ht; simp ⟩)
+quotient.lift (neg_aux α S) $
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨t, hts, ht⟩,
+quotient.sound ⟨t, hts, calc
+        t * (-r₁ * s₂ - -r₂ * s₁)
+      = -(t * (r₁ * s₂ - r₂ * s₁)) : by ring
+  ... = 0 : by rw ht; simp⟩
 
-def pre_mul : α × {s // s ∈ S} → α × {s // s ∈ S} → loc α S :=
+def mul_aux : α × S → α × S → loc α S :=
 λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩, ⟦⟨r₁ * r₂, s₁ * s₂, is_submonoid.mul_mem hs₁ hs₂⟩⟧
 
 def mul : loc α S → loc α S → loc α S :=
-quotient.lift₂ (pre_mul α S)
-(λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨r₄, s₄, hs₄⟩ ⟨t₅, hts₅, ht₅⟩ ⟨t₆, hts₆, ht₆⟩, quotient.sound
- ⟨t₅ * t₆, is_submonoid.mul_mem hts₅ hts₆, calc
-          t₅ * t₆ * ((r₁ * r₂) * (s₃ * s₄) - (r₃ * r₄) * (s₁ * s₂))
-        = t₆ * (t₅ * (r₁ * s₃ - r₃ * s₁)) * r₂ * s₄ + t₅ * (t₆ * (r₂ * s₄ - r₄ * s₂)) * r₃ * s₁ : by ring
-    ... = 0 : by rw [ht₅, ht₆]; simp ⟩)
-
-def one : loc α S := ⟦⟨1, 1, is_submonoid.one_mem S⟩⟧
+quotient.lift₂ (mul_aux α S) $
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨r₄, s₄, hs₄⟩ ⟨t₅, hts₅, ht₅⟩ ⟨t₆, hts₆, ht₆⟩,
+quotient.sound ⟨t₅ * t₆, is_submonoid.mul_mem hts₅ hts₆, calc
+        t₅ * t₆ * ((r₁ * r₂) * (s₃ * s₄) - (r₃ * r₄) * (s₁ * s₂))
+      = t₆ * (t₅ * (r₁ * s₃ - r₃ * s₁)) * r₂ * s₄ + t₅ * (t₆ * (r₂ * s₄ - r₄ * s₂)) * r₃ * s₁ : by ring
+  ... = 0 : by rw [ht₅, ht₆]; simp⟩
 
 instance : comm_ring (loc α S) :=
 by refine
