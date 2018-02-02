@@ -1,6 +1,6 @@
-import tactic.norm_num tactic.ring
+import tactic.ring
 
-universes u v w
+universe u
 
 namespace loc
 
@@ -10,22 +10,29 @@ class is_submonoid : Prop :=
 (one_mem : (1:α) ∈ S)
 (mul_mem : ∀ {s t}, s ∈ S → t ∈ S → s*t ∈ S)
 
-variables [is_submonoid α S]
+variable [is_submonoid α S]
+
+def r : α × {s // s ∈ S} → α × {s // s ∈ S} → Prop :=
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩, ∃ t ∈ S, t * (r₁ * s₂ - r₂ * s₁) = 0
+
+theorem refl : ∀ (x : α × {s // s ∈ S}), r α S x x :=
+λ ⟨r₁, s₁, hs₁⟩, ⟨1, is_submonoid.one_mem S, by simp⟩
+
+theorem symm : ∀ (x y : α × {s // s ∈ S}), r α S x y → r α S y x :=
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨t, hts, ht⟩, ⟨t, hts, calc
+        t * (r₂ * s₁ - r₁ * s₂)
+      = -(t * (r₁ * s₂ - r₂ * s₁)) : by ring
+  ... = 0 : by rw ht; simp⟩
+
+theorem trans : ∀ (x y z : α × {s // s ∈ S}), r α S x y → r α S y z → r α S x z :=
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨t, hts, ht⟩ ⟨t', hts', ht'⟩,
+⟨t * t' * s₂, is_submonoid.mul_mem (is_submonoid.mul_mem hts hts') hs₂, calc
+         t * t' * s₂ * (r₁ * s₃ - r₃ * s₁)
+       = t' * s₃ * (t * (r₁ * s₂ - r₂ * s₁)) + t * s₁ * (t' * (r₂ * s₃ - r₃ * s₂)) : by ring
+   ... = 0 : by rw [ht, ht']; simp⟩
 
 instance : setoid (α × {s // s ∈ S}) :=
-{ r := λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩,
-    ∃ t ∈ S, t * (r₁ * s₂ - r₂ * s₁) = 0,
-  iseqv :=
-    ⟨λ ⟨r₁, s₁, hs₁⟩, ⟨1, is_submonoid.one_mem S, by simp⟩,
-     λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨t, hts, ht⟩,
-       ⟨t, hts, calc t * (r₂ * s₁ - r₁ * s₂)
-              = -(t * (r₁ * s₂ - r₂ * s₁)) : by ring
-          ... = 0 : by rw ht; simp⟩ ,
-     λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨t, hts, ht⟩ ⟨t', hts', ht'⟩,
-       ⟨t * t' * s₂, is_submonoid.mul_mem (is_submonoid.mul_mem hts hts') hs₂, calc
-                t * t' * s₂ * (r₁ * s₃ - r₃ * s₁)
-              = t' * s₃ * (t * (r₁ * s₂ - r₂ * s₁)) + t * s₁ * (t' * (r₂ * s₃ - r₃ * s₂)) : by ring
-          ... = 0 : by rw [ht, ht']; simp⟩⟩ }
+⟨r α S, refl α S, symm α S, trans α S⟩
 
 def loc := quotient $ loc.setoid α S
 
