@@ -1,7 +1,6 @@
 import algebra.ring data.set.basic tactic.ring data.equiv data.quot
 
 -- remove "data.equiv" in PR version
--- needs hom and prime ideals
 
 universes u v
 
