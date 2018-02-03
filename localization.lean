@@ -1,9 +1,73 @@
-import data.set.basic tactic.ring data.equiv
+import algebra.ring data.set.basic tactic.ring data.equiv data.quot
 
 -- remove "data.equiv" in PR version
 -- needs hom and prime ideals
 
 universes u v
+
+-- <move to algebra.ring>
+
+class is_hom {α : Type u} {β : Type v} [comm_ring α] [comm_ring β] (f : α → β) : Prop :=
+(map_add : ∀ {x y}, f (x + y) = f x + f y)
+(map_mul : ∀ {x y}, f (x * y) = f x * f y)
+(map_one : f 1 = 1)
+
+namespace is_hom
+
+variables {α : Type u} {β : Type v} [comm_ring α] [comm_ring β]
+variables (f : α → β) [is_hom f] {x y : α}
+
+attribute [simp] map_add
+attribute [simp] map_mul
+attribute [simp] map_one
+
+@[simp] lemma map_zero : f 0 = 0 :=
+calc f 0 = f (0 + 0) - f 0 : by rw [map_add f]; simp
+     ... = 0 : by simp
+
+@[simp] lemma map_neg : f (-x) = -f x :=
+calc f (-x) = f (-x + x) - f x : by rw [map_add f]; simp
+        ... = -f x : by simp [map_zero f]
+
+@[simp] lemma map_sub : f (x - y) = f x - f y :=
+by simp [map_add f, map_neg f]
+
+end is_hom
+
+class is_ideal (α : Type u) [comm_ring α] (S : set α) : Prop :=
+(zero_mem : (0 : α) ∈ S)
+(add_mem : ∀ {x y}, x ∈ S → y ∈ S → x + y ∈ S)
+(mul_mem : ∀ {x y}, x ∈ S → x * y ∈ S)
+
+namespace is_ideal
+
+variables {α : Type u} [comm_ring α] {S : set α} [is_ideal α S] {x y z : α}
+include S
+
+attribute [simp] zero_mem
+
+lemma neg_mem : x ∈ S → -x ∈ S :=
+λ hx, have h : x * -1 ∈ S, from is_ideal.mul_mem hx, by simpa using h
+
+lemma sub_mem : x ∈ S → y ∈ S → x - y ∈ S :=
+λ hx hy, have h : x + -y ∈ S, from add_mem hx $ neg_mem hy, by simpa using h
+
+lemma mul_mem' : y ∈ S → x * y ∈ S :=
+λ hy, have h : y * x ∈ S, from mul_mem hy, by rwa [mul_comm]
+
+end is_ideal
+
+-- </move>
+
+-- <move to data.quot>
+
+@[simp] lemma quotient.lift_beta {α : Sort u} {β : Sort v} [s : setoid α] (f : α → β) (h : ∀ (a b : α), a ≈ b → f a = f b) (x : α):
+quotient.lift f h (quotient.mk x) = f x := rfl
+
+@[simp] lemma quotient.lift_on_beta {α : Sort u} {β : Sort v} [s : setoid α] (f : α → β) (h : ∀ (a b : α), a ≈ b → f a = f b) (x : α):
+quotient.lift_on (quotient.mk x) f h = f x := rfl
+
+-- </move>
 
 namespace loc
 
@@ -15,19 +79,29 @@ class is_submonoid : Prop :=
 
 variable [is_submonoid α S]
 
+def r : α × S → α × S → Prop :=
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩, ∃ t ∈ S, t * (r₁ * s₂ - r₂ * s₁) = 0
+
+local infix ≈ := r α S
+
+theorem refl : ∀ (x : α × S), x ≈ x :=
+λ ⟨r₁, s₁, hs₁⟩, ⟨1, is_submonoid.one_mem S, by simp⟩
+
+theorem symm : ∀ (x y : α × S), x ≈ y → y ≈ x :=
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨t, hts, ht⟩, ⟨t, hts, calc
+        t * (r₂ * s₁ - r₁ * s₂)
+      = -(t * (r₁ * s₂ - r₂ * s₁)) : by simp [mul_add]
+  ... = 0 : by rw ht; simp⟩
+
+theorem trans : ∀ (x y z : α × S), x ≈ y → y ≈ z → x ≈ z :=
+λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨t, hts, ht⟩ ⟨t', hts', ht'⟩,
+⟨t * t' * s₂, is_submonoid.mul_mem (is_submonoid.mul_mem hts hts') hs₂, calc
+         t * t' * s₂ * (r₁ * s₃ - r₃ * s₁)
+       = t' * s₃ * (t * (r₁ * s₂ - r₂ * s₁)) + t * s₁ * (t' * (r₂ * s₃ - r₃ * s₂)) : by simp [mul_left_comm, mul_add, mul_comm]
+   ... = 0 : by rw [ht, ht']; simp⟩
+
 instance : setoid (α × S) :=
-{ r     := λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩, ∃ t ∈ S, t * (r₁ * s₂ - r₂ * s₁) = 0,
-  iseqv := ⟨λ ⟨r₁, s₁, hs₁⟩, ⟨1, is_submonoid.one_mem S, by simp⟩,
-    λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨t, hts, ht⟩,
-    ⟨t, hts, calc
-             t * (r₂ * s₁ - r₁ * s₂)
-           = -(t * (r₁ * s₂ - r₂ * s₁)) : by ring
-       ... = 0 : by rw ht; simp⟩,
-    λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨t, hts, ht⟩ ⟨t', hts', ht'⟩,
-    ⟨t * t' * s₂, is_submonoid.mul_mem (is_submonoid.mul_mem hts hts') hs₂, calc
-             t * t' * s₂ * (r₁ * s₃ - r₃ * s₁)
-           = t' * s₃ * (t * (r₁ * s₂ - r₂ * s₁)) + t * s₁ * (t' * (r₂ * s₃ - r₃ * s₂)) : by ring
-       ... = 0 : by rw [ht, ht']; simp⟩⟩ }
+⟨r α S, refl α S, symm α S, trans α S⟩
 
 def loc := quotient $ loc.setoid α S
 
@@ -61,7 +135,7 @@ quotient.lift₂ (mul_aux α S) $
 λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩ ⟨r₃, s₃, hs₃⟩ ⟨r₄, s₄, hs₄⟩ ⟨t₅, hts₅, ht₅⟩ ⟨t₆, hts₆, ht₆⟩,
 quotient.sound ⟨t₅ * t₆, is_submonoid.mul_mem hts₅ hts₆, calc
         t₅ * t₆ * ((r₁ * r₂) * (s₃ * s₄) - (r₃ * r₄) * (s₁ * s₂))
-      = t₆ * (t₅ * (r₁ * s₃ - r₃ * s₁)) * r₂ * s₄ + t₅ * (t₆ * (r₂ * s₄ - r₄ * s₂)) * r₃ * s₁ : by ring
+      = t₆ * (t₅ * (r₁ * s₃ - r₃ * s₁)) * r₂ * s₄ + t₅ * (t₆ * (r₂ * s₄ - r₄ * s₂)) * r₃ * s₁ : by simp [mul_left_comm, mul_add, mul_comm]
   ... = 0 : by rw [ht₅, ht₆]; simp⟩
 
 instance : comm_ring (loc α S) :=
@@ -89,9 +163,15 @@ by refine
   apply quotient.sound,
   existsi (1:α),
   existsi is_submonoid.one_mem S,
-  ring }
+  simp [mul_left_comm, mul_add, mul_comm] }
 
-instance : has_coe α (loc α S) := ⟨λ r, ⟦⟨r, 1, is_submonoid.one_mem S⟩⟧⟩
+def of_comm_ring : α → loc α S :=
+λ r, ⟦⟨r, 1, is_submonoid.one_mem S⟩⟧
+
+instance : is_hom (of_comm_ring α S) :=
+{ map_add := λ x y, quotient.sound $ by simp,
+  map_mul := λ x y, quotient.sound $ by simp,
+  map_one := rfl }
 
 local infix ^ := monoid.pow
 
@@ -173,12 +253,6 @@ begin
     by simpa [mul_comm] using congr_arg (λ x, -x) hrs⟩ }
 end
 
-@[simp] lemma quotient.lift_beta {α : Sort u} {β : Sort v} [s : setoid α] (f : α → β) (h : ∀ (a b : α), a ≈ b → f a = f b) (x : α):
-quotient.lift f h (quotient.mk x) = f x := rfl
-
-@[simp] lemma quotient.lift_on_beta {α : Sort u} {β : Sort v} [s : setoid α] (f : α → β) (h : ∀ (a b : α), a ≈ b → f a = f b) (x : α):
-quotient.lift_on (quotient.mk x) f h = f x := rfl
-
 instance quotient_ring.field.of_integral_domain : field (quotient_ring β) :=
 by refine
 { loc.comm_ring β _ with
@@ -212,12 +286,10 @@ end loc
 
 /- TODO:
 1. Define localization at a prime ideal.
-2. Prove that loc.has_coe is a homomorphism of rings.
 3. Prove that loc is a local ring if localizing at a prime ideal.
 -/
 
 -- Factoids (not to go to mathlib):
-#check rat
 
 def frac_int_to_rat : loc.quotient_ring ℤ → ℚ :=
 λ f, quotient.lift_on f (λ ⟨r, s, hs⟩, rat.mk r s) $
@@ -266,5 +338,3 @@ def canonical : equiv (loc.quotient_ring ℤ) (ℚ) :=
 ⟨frac_int_to_rat, frac_int_of_rat,
    frac_int_to_rat_to_frac_int,
    rat_to_frac_int_to_rat⟩
-
-#print horner
