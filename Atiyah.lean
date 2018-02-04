@@ -44,19 +44,15 @@ namespace is_hom
 variables {α : Type u} {β : Type v} [comm_ring α] [comm_ring β]
 variables (f : α → β) [is_hom f] {x y : α}
 
-attribute [simp] map_add
-attribute [simp] map_mul
-attribute [simp] map_one
-
-@[simp] lemma map_zero : f 0 = 0 :=
+lemma map_zero : f 0 = 0 :=
 calc f 0 = f (0 + 0) - f 0 : by rw [map_add f]; simp
      ... = 0 : by simp
 
-@[simp] lemma map_neg : f (-x) = -f x :=
+lemma map_neg : f (-x) = -f x :=
 calc f (-x) = f (-x + x) - f x : by rw [map_add f]; simp
         ... = -f x : by simp [map_zero f]
 
-@[simp] lemma map_sub : f (x - y) = f x - f y :=
+lemma map_sub : f (x - y) = f x - f y :=
 by simp [map_add f, map_neg f]
 
 end is_hom
@@ -1491,6 +1487,22 @@ theorem inter_eq_mul_of_coprime : coprime S₁ S₂ → S₁ ∩ S₂ = S₁ * S
       ... ⊆ S₁ * S₂ : add_mul_inter_subset_mul)
 mul_subset_inter
 
+def pow.aux : ℕ → {x : set α // is_ideal α x}
+| 0            := ⟨univ_ideal α, univ_ideal.is_ideal α⟩
+| (nat.succ n) := ⟨@@mul _ (pow.aux n).val S (pow.aux n).property _,
+    @@mul.is_ideal _ (pow.aux n).val S (pow.aux n).property _⟩
+
+def pow : ℕ → set α := λ n, (pow.aux S n).val
+
+infix ^ := pow
+
+instance pow.is_ideal : Π n:ℕ, is_ideal α (S^n) :=
+λ n, (pow.aux S n).property
+
+theorem pow.zero : S^0 = univ_ideal α := rfl
+
+theorem pow.succ (n : ℕ) : S^(nat.succ n) = S^n * S := rfl
+
 end operations_on_ideals
 
 end is_ideal
@@ -1604,68 +1616,65 @@ end product
 
 namespace indexed_product
 
-variables {I : Type u} (β : I → Type u) (H : ∀ i:I, comm_ring $ β i) (z : I)
+variables {I : Type u} (β : I → Type v) (H : ∀ i:I, comm_ring $ β i) (z : I)
 variables (α : Type u) [comm_ring α]
 
-structure tuple :=
-(coordinate : Π i:I, β i)
+def tuple := Π i:I, β i
 
 variables {β}
 
-theorem tuple.ext : Π {f g : tuple β}, (∀ i, f.coordinate i = g.coordinate i) → f = g
-| ⟨f⟩ ⟨g⟩ h := congr_arg tuple.mk $ funext h
+theorem tuple.ext : Π {f g : tuple β}, (∀ i, f i = g i) → f = g
+| f g h := funext h
 
 variables (β)
 
 variables (f g h : tuple β)
 
 def add : tuple β → tuple β → tuple β :=
-λ f g, ⟨λ i, @comm_ring.add (β i) (H i) (f.coordinate i) (g.coordinate i)⟩
+λ f g i, @comm_ring.add (β i) (H i) (f i) (g i)
 
 theorem add_assoc : add β H (add β H f g) h = add β H f (add β H g h) :=
-tuple.ext $ λ i, @comm_ring.add_assoc (β i) (H i) (f.coordinate i) (g.coordinate i) (h.coordinate i)
+tuple.ext $ λ i, @comm_ring.add_assoc (β i) (H i) (f i) (g i) (h i)
 
-def zero : tuple β :=
-⟨λ i, @comm_ring.zero (β i) (H i)⟩
+def zero : tuple β := λ i, @comm_ring.zero (β i) (H i)
 
 theorem zero_add : add β H (zero β H) f = f :=
-tuple.ext $ λ i, @comm_ring.zero_add (β i) (H i) (f.coordinate i)
+tuple.ext $ λ i, @comm_ring.zero_add (β i) (H i) (f i)
 
 theorem add_zero : add β H f (zero β H) = f :=
-tuple.ext $ λ i, @comm_ring.add_zero (β i) (H i) (f.coordinate i)
+tuple.ext $ λ i, @comm_ring.add_zero (β i) (H i) (f i)
 
 def neg : tuple β → tuple β :=
-λ f, ⟨λ i, @comm_ring.neg (β i) (H i) (f.coordinate i)⟩
+λ f i, @comm_ring.neg (β i) (H i) (f i)
 
 theorem add_left_neg : add β H (neg β H f) f = zero β H :=
-tuple.ext $ λ i, @comm_ring.add_left_neg (β i) (H i) (f.coordinate i)
+tuple.ext $ λ i, @comm_ring.add_left_neg (β i) (H i) (f i)
 
 theorem add_comm : add β H f g = add β H g f :=
-tuple.ext $ λ i, @comm_ring.add_comm (β i) (H i) (f.coordinate i) (g.coordinate i)
+tuple.ext $ λ i, @comm_ring.add_comm (β i) (H i) (f i) (g i)
 
 def mul : tuple β → tuple β → tuple β :=
-λ f g, ⟨λ i, @comm_ring.mul (β i) (H i) (f.coordinate i) (g.coordinate i)⟩
+λ f g i, @comm_ring.mul (β i) (H i) (f i) (g i)
 
 theorem mul_assoc : mul β H (mul β H f g) h = mul β H f (mul β H g h) :=
-tuple.ext $ λ i, @comm_ring.mul_assoc (β i) (H i) (f.coordinate i) (g.coordinate i) (h.coordinate i)
+tuple.ext $ λ i, @comm_ring.mul_assoc (β i) (H i) (f i) (g i) (h i)
 
-def one : tuple β :=
-⟨λ i, @comm_ring.one (β i) (H i)⟩
+def one : tuple β := λ i, @comm_ring.one (β i) (H i)
 
 theorem one_mul : mul β H (one β H) f = f :=
-tuple.ext $ λ i, @comm_ring.one_mul (β i) (H i) (f.coordinate i)
+tuple.ext $ λ i, @comm_ring.one_mul (β i) (H i) (f i)
 
 theorem mul_one : mul β H f (one β H) = f :=
-tuple.ext $ λ i, @comm_ring.mul_one (β i) (H i) (f.coordinate i)
+tuple.ext $ λ i, @comm_ring.mul_one (β i) (H i) (f i)
 
 theorem left_distrib : mul β H f (add β H g h) = add β H (mul β H f g) (mul β H f h) :=
-tuple.ext $ λ i, @comm_ring.left_distrib (β i) (H i) (f.coordinate i) (g.coordinate i) (h.coordinate i)
+tuple.ext $ λ i, @comm_ring.left_distrib (β i) (H i) (f i) (g i) (h i)
 
 theorem right_distrib : mul β H (add β H f g) h = add β H (mul β H f h) (mul β H g h) :=
-tuple.ext $ λ i, @comm_ring.right_distrib (β i) (H i) (f.coordinate i) (g.coordinate i) (h.coordinate i)
+tuple.ext $ λ i, @comm_ring.right_distrib (β i) (H i) (f i) (g i) (h i)
 
 theorem mul_comm : mul β H f g = mul β H g f :=
-tuple.ext $ λ i, @comm_ring.mul_comm (β i) (H i) (f.coordinate i) (g.coordinate i)
+tuple.ext $ λ i, @comm_ring.mul_comm (β i) (H i) (f i) (g i)
 
 instance : comm_ring (tuple β) :=
 { add            := add β H,
@@ -1686,7 +1695,7 @@ instance : comm_ring (tuple β) :=
   mul_comm       := mul_comm β H }
 
 def proj : tuple β → β z :=
-λ f, f.coordinate z
+λ f, f z
 
 instance proj.is_hom : @@is_hom (indexed_product.comm_ring β H) (H z) (proj β z) :=
 by refine {..}; intros; refl
@@ -1694,7 +1703,7 @@ by refine {..}; intros; refl
 variable (I)
 
 def diagonal : α → tuple (λ i:I, α) :=
-λ x, ⟨λ i, x⟩
+λ x i, x
 
 variable {I}
 
@@ -1702,7 +1711,7 @@ instance diagonal.is_hom : @@is_hom _ (indexed_product.comm_ring (λ i, α) (λ 
 by refine {..}; intros; refl
 
 def factor {γ : Type u} : (Π i:I, γ → β i) → (γ → tuple β)
-| f := λ x, ⟨λ i, f i x⟩
+| f := λ x i, f i x
 
 def factor.comm (γ : Type u) (f : Π i:I, γ → β i) : ∀ i:I, f i = (proj β i) ∘ (factor β f) :=
 λ i, rfl
@@ -1711,3 +1720,46 @@ def factor.unique (γ : Type u) (f : Π i:I, γ → β i) (factor' : γ → tupl
 λ h, funext $ λ x, tuple.ext $ λ i, eq.symm $ @congr_fun _ _ _ _ (h i) x
 
 end indexed_product
+
+namespace adic
+
+variables {α : Type u} [comm_ring α] (J : set α) [is_ideal α J] [is_prime_ideal J] (n : ℕ)
+
+def proj : quotient (is_ideal.setoid $ J^(n+1)) → quotient (is_ideal.setoid $ J^n) :=
+@@quotient.lift (is_ideal.setoid $ J^(n+1))
+  (is_ideal.to_coset $ J^n)
+  (λ x y hxy, have J^(n+1) ⊆ J^n, by rw is_ideal.pow.succ; from is_ideal.mul_subset_left,
+     @@quotient.sound (is_ideal.setoid (J^n)) $ this hxy)
+
+instance proj.is_hom : is_hom (proj J n) :=
+{ map_add := λ x y,
+    let ⟨m₁, hm₁⟩ := is_ideal.coset_rep x,
+        ⟨m₂, hm₂⟩ := is_ideal.coset_rep y in
+    by rw [← hm₁, ← hm₂]; apply quotient.sound (setoid.refl _),
+  map_mul := λ x y,
+    let ⟨m₁, hm₁⟩ := is_ideal.coset_rep x,
+        ⟨m₂, hm₂⟩ := is_ideal.coset_rep y in
+    by rw [← hm₁, ← hm₂]; apply quotient.sound (setoid.refl _),
+  map_one := by apply quotient.sound (setoid.refl _) }
+
+def int := {f : Π n:ℕ, α/J^n | ∀ n, adic.proj J n (f (n+1)) = f n}
+
+instance int.comm_ring : comm_ring (adic.int J) :=
+@subring.comm_ring
+  (Π (n : ℕ), α/J^n)
+  (indexed_product.comm_ring
+     (λ n, α/J^n)
+     (λ n, is_ideal.comm_ring $ J^n))
+  (int J)
+  { add_mem := λ x y hx hy n,
+      show proj J n (x (n + 1) + y (n + 1)) = x n + y n,
+      by rw [is_hom.map_add (proj J n), hx, hy],
+    neg_mem := λ x hx n,
+      show proj J n (-x (n + 1)) = -x n,
+      by rw [is_hom.map_neg (proj J n), hx],
+    mul_mem := λ x y hx hy n,
+      show proj J n (x (n + 1) * y (n + 1)) = x n * y n,
+      by rw [is_hom.map_mul (proj J n), hx, hy],
+    one_mem := λ n, rfl }
+
+end adic
