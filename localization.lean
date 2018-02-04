@@ -1,40 +1,58 @@
 import algebra.ring data.set.basic tactic.ring data.equiv data.quot
 
 -- remove "data.equiv" in PR version
+-- ring.localization
 
 universes u v
+
+-- <migrations>
+-- <move to algebra.group>
+
+class is_submonoid (α : Type u) [monoid α] (S : set α) : Prop :=
+(one_mem : (1:α) ∈ S)
+(mul_mem : ∀ {s t}, s ∈ S → t ∈ S → s*t ∈ S)
+
+-- </move>
+
+-- <move to algebra.group_power>
+
+local infix ^ := monoid.pow
+
+def powers {α : Type u} [monoid α] (x : α) : set α := {y | ∃ n, x^n = y}
+
+instance powers.is_submonoid {α : Type u} [monoid α] (x : α)  : is_submonoid α (powers x) :=
+{ one_mem := ⟨0, by simp⟩,
+  mul_mem := λ x₁ x₂ ⟨n₁, hn₁⟩ ⟨n₂, hn₂⟩, ⟨n₁ + n₂, by simp [pow_add, *]⟩ }
+
+-- </move>
 
 -- <move to algebra.ring>
 
 def is_unit {α : Type u} [comm_ring α] (x : α) := ∃ y, x * y = 1
 def nonunits (α : Type u) [comm_ring α] : set α := { x | ¬∃ y, x * y = 1 }
 
-class is_hom {α : Type u} {β : Type v} [comm_ring α] [comm_ring β] (f : α → β) : Prop :=
+class is_ring_hom {α : Type u} {β : Type v} [comm_ring α] [comm_ring β] (f : α → β) : Prop :=
 (map_add : ∀ {x y}, f (x + y) = f x + f y)
 (map_mul : ∀ {x y}, f (x * y) = f x * f y)
 (map_one : f 1 = 1)
 
-namespace is_hom
+namespace is_ring_hom
 
 variables {α : Type u} {β : Type v} [comm_ring α] [comm_ring β]
-variables (f : α → β) [is_hom f] {x y : α}
+variables (f : α → β) [is_ring_hom f] {x y : α}
 
-attribute [simp] map_add
-attribute [simp] map_mul
-attribute [simp] map_one
-
-@[simp] lemma map_zero : f 0 = 0 :=
+lemma map_zero : f 0 = 0 :=
 calc f 0 = f (0 + 0) - f 0 : by rw [map_add f]; simp
      ... = 0 : by simp
 
-@[simp] lemma map_neg : f (-x) = -f x :=
+lemma map_neg : f (-x) = -f x :=
 calc f (-x) = f (-x + x) - f x : by rw [map_add f]; simp
         ... = -f x : by simp [map_zero f]
 
-@[simp] lemma map_sub : f (x - y) = f x - f y :=
+lemma map_sub : f (x - y) = f x - f y :=
 by simp [map_add f, map_neg f]
 
-end is_hom
+end is_ring_hom
 
 class is_ideal (α : Type u) [comm_ring α] (S : set α) : Prop :=
 (zero_mem : (0 : α) ∈ S)
@@ -84,12 +102,11 @@ end is_ideal
 instance zero_ideal.is_ideal (α : Type u) [comm_ring α] : is_ideal α $ zero_ideal α :=
 by refine {..}; intros; simp [set.mem_singleton_iff] at *; simp [*]
 
-@[reducible] def univ_ideal (α : Type u) [comm_ring α] : set α := set.univ
-instance univ_ideal.is_ideal (α : Type u) [comm_ring α] : is_ideal α $ univ_ideal α :=
+instance univ.is_ideal (α : Type u) [comm_ring α] : is_ideal α set.univ :=
 by refine {..}; intros; trivial
 
 theorem is_ideal.eq_univ_of_contains_unit {α : Type u} [comm_ring α] (S : set α) [is_ideal α S] :
-(∃ x:α, x ∈ S ∧ is_unit x) → S = set.univ :=
+(∃ x ∈ S, is_unit x) → S = set.univ :=
 λ ⟨x, hx, y, hy⟩, set.ext $ λ z, ⟨λ hz, trivial, λ hz, calc
    z = (x * y) * z : by simp [hy]
  ... = x * (y * z) : mul_assoc x y z
@@ -100,13 +117,17 @@ theorem is_ideal.univ_of_one_mem {α : Type u} [comm_ring α] (S : set α) [is_i
 λ h, set.ext $ λ z, ⟨λ hz, trivial, λ hz, by simpa using (is_ideal.mul_mem h : 1 * z ∈ S)⟩
 
 instance is_ideal.hom_preimage {α : Type u} {β : Type v} [comm_ring α] [comm_ring β]
-(f : α → β) [is_hom f] (S : set β) [is_ideal β S] : is_ideal α (f ⁻¹' S) :=
-{ zero_mem := by simp [is_hom.map_zero f],
-  add_mem  := λ x y (hx : f x ∈ S) hy, by simp [is_hom.map_add f, is_ideal.add_mem hx hy],
-  mul_mem  := λ x y (hx : f x ∈ S), by simp [is_hom.map_mul f, is_ideal.mul_mem hx] }
+(f : α → β) [is_ring_hom f] (S : set β) [is_ideal β S] : is_ideal α (f ⁻¹' S) :=
+{ zero_mem := by simp [is_ring_hom.map_zero f],
+  add_mem  := λ x y (hx : f x ∈ S) hy, by simp [is_ring_hom.map_add f, is_ideal.add_mem hx hy],
+  mul_mem  := λ x y (hx : f x ∈ S), by simp [is_ring_hom.map_mul f, is_ideal.mul_mem hx] }
+
+-- </move>
+
+-- <move to ring_theory.ideals>
 
 class is_prime_ideal {α : Type u} [comm_ring α] (S : set α) extends is_ideal α S : Prop :=
-(ne_univ_ideal : S ≠ univ_ideal α)
+(ne_univ : S ≠ set.univ)
 (mem_or_mem_of_mul_mem : ∀ {x y : α}, x * y ∈ S → x ∈ S ∨ y ∈ S)
 
 theorem mem_or_mem_of_mul_eq_zero {α : Type u} [comm_ring α] (S : set α) [is_prime_ideal S] :
@@ -116,14 +137,14 @@ is_prime_ideal.mem_or_mem_of_mul_mem this
 
 class is_maximal_ideal {α : Type u} [comm_ring α] (S : set α) extends is_ideal α S : Prop :=
 mk' ::
-  (ne_univ_ideal : S ≠ univ_ideal α)
-  (eq_or_univ_of_subset : ∀ (T : set α) [is_ideal α T], S ⊆ T → T = S ∨ T = univ_ideal α)
+  (ne_univ : S ≠ set.univ)
+  (eq_or_univ_of_subset : ∀ (T : set α) [is_ideal α T], S ⊆ T → T = S ∨ T = set.univ)
 
 theorem is_maximal_ideal.mk {α : Type u} [comm_ring α] (S : set α) [is_ideal α S] :
   (1:α) ∉ S → (∀ x (T : set α) [is_ideal α T], S ⊆ T → x ∉ S → x ∈ T → (1:α) ∈ T) → is_maximal_ideal S :=
 λ h₁ h₂,
 { _inst_2 with
-  ne_univ_ideal := λ hu, have (1:α) ∈ S, by rw hu; trivial, h₁ this,
+  ne_univ := λ hu, have (1:α) ∈ S, by rw hu; trivial, h₁ this,
   eq_or_univ_of_subset := λ T ht hst, or.cases_on (classical.em $ ∃ x, x ∉ S ∧ x ∈ T)
     (λ ⟨x, hxns, hxt⟩, or.inr $ @@is_ideal.univ_of_one_mem _ T ht $ @@h₂ x T ht hst hxns hxt)
     (λ hnts, or.inl $ set.ext $ λ x,
@@ -131,7 +152,7 @@ theorem is_maximal_ideal.mk {α : Type u} [comm_ring α] (S : set α) [is_ideal 
         λ hxs, hst hxs⟩) }
 
 theorem not_unit_of_mem_maximal_ideal {α : Type u} [comm_ring α] (S : set α) [is_maximal_ideal S] : S ⊆ nonunits α :=
-λ x hx hxy, is_maximal_ideal.ne_univ_ideal S $ is_ideal.eq_univ_of_contains_unit S ⟨x, hx, hxy⟩
+λ x hx hxy, is_maximal_ideal.ne_univ S $ is_ideal.eq_univ_of_contains_unit S ⟨x, hx, hxy⟩
 
 class local_ring (α : Type u) [comm_ring α] :=
 (S : set α)
@@ -162,16 +183,11 @@ quotient.lift f h (quotient.mk x) = f x := rfl
 quotient.lift_on (quotient.mk x) f h = f x := rfl
 
 -- </move>
+-- </migrations>
 
 namespace loc
 
-variables (α : Type u) [comm_ring α] (S : set α)
-
-class is_submonoid : Prop :=
-(one_mem : (1:α) ∈ S)
-(mul_mem : ∀ {s t}, s ∈ S → t ∈ S → s*t ∈ S)
-
-variable [is_submonoid α S]
+variables (α : Type u) [comm_ring α] (S : set α) [is_submonoid α S] (x : α)
 
 def r : α × S → α × S → Prop :=
 λ ⟨r₁, s₁, hs₁⟩ ⟨r₂, s₂, hs₂⟩, ∃ t ∈ S, t * (r₁ * s₂ - r₂ * s₁) = 0
@@ -263,7 +279,7 @@ by refine
 def of_comm_ring : α → loc α S :=
 λ r, ⟦⟨r, 1, is_submonoid.one_mem S⟩⟧
 
-instance : is_hom (of_comm_ring α S) :=
+instance : is_ring_hom (of_comm_ring α S) :=
 { map_add := λ x y, quotient.sound $ by simp,
   map_mul := λ x y, quotient.sound $ by simp,
   map_one := rfl }
@@ -272,13 +288,10 @@ local infix ^ := monoid.pow
 
 variable {α}
 
-def powers (x : α) : set α := {y | ∃ n, x^n = y}
+def away := loc α (powers x)
 
-instance powers.is_submonoid (x : α) : is_submonoid α (powers x) :=
-{ one_mem := ⟨0, by simp⟩,
-  mul_mem := λ x₁ x₂ ⟨n₁, hn₁⟩ ⟨n₂, hn₂⟩, ⟨n₁ + n₂, by simp [pow_add, *]⟩ }
-
-def away (x : α) := loc α (powers x)
+instance away.comm_ring : comm_ring (away x) :=
+loc.comm_ring α (powers x)
 
 section at_prime
 
@@ -286,15 +299,17 @@ variables (P : set α) [is_prime_ideal P]
 
 instance prime.is_submonoid :
   is_submonoid α (set.compl P) :=
-{ one_mem := λ h, is_prime_ideal.ne_univ_ideal P $
+{ one_mem := λ h, is_prime_ideal.ne_univ P $
     is_ideal.univ_of_one_mem P h,
   mul_mem := λ x y hnx hny hxy, or.cases_on
     (is_prime_ideal.mem_or_mem_of_mul_mem hxy) hnx hny }
 
 def at_prime := loc α (set.compl P)
 
-instance at_prime.local_ring :
-  @local_ring (at_prime P) (loc.comm_ring α _) :=
+instance at_prime.comm_ring : comm_ring (at_prime P) :=
+loc.comm_ring α (set.compl P)
+
+instance at_prime.local_ring : local_ring (at_prime P) :=
 local_of_nonunits_ideal
   (λ hze, have _, from quotient.exact hze, let ⟨t, hts, ht⟩ := this in
      hts $ have htz : t = 0, by simpa using ht,
@@ -348,6 +363,9 @@ instance non_zero_divisors.is_submonoid : is_submonoid α (non_zero_divisors α)
 
 def quotient_ring := loc α (non_zero_divisors α)
 
+instance quotient_ring.comm_ring : comm_ring (quotient_ring α) :=
+loc.comm_ring α (non_zero_divisors α)
+
 section quotient_ring
 
 variables {β : Type u} [integral_domain β] [decidable_eq β]
@@ -356,11 +374,9 @@ lemma ne_zero_of_mem_non_zero_divisors {x : β} :
   x ∈ loc.non_zero_divisors β → x ≠ 0 :=
 λ hm hz, have x * 1 = 0, by simp [hz], zero_ne_one (hm 1 this).symm
 
-lemma eq_zero_of_ne_zero_of_mul_eq_zero {x y : β} : x ≠ 0 → x * y = 0 → y = 0 :=
-λ hnx hxy, match eq_zero_or_eq_zero_of_mul_eq_zero hxy with
-| or.inl hx := false.elim $ hnx hx
-| or.inr hy := hy
-end
+lemma eq_zero_of_ne_zero_of_mul_eq_zero {x y : β} :
+  x ≠ 0 → x * y = 0 → y = 0 :=
+λ hnx hxy, or.resolve_left (eq_zero_or_eq_zero_of_mul_eq_zero hxy) hnx
 
 lemma mem_non_zero_divisors_of_ne_zero {x : β} :
   x ≠ 0 → x ∈ loc.non_zero_divisors β :=
@@ -396,12 +412,12 @@ end
 
 instance quotient_ring.field.of_integral_domain : field (quotient_ring β) :=
 by refine
-{ loc.comm_ring β _ with
-  inv := inv β,
+{ inv := inv β,
   zero_ne_one := λ hzo, let ⟨t, hts, ht⟩ := quotient.exact hzo in
     zero_ne_one (by simpa using hts _ ht : 0 = 1),
   mul_inv_cancel := quotient.ind _,
-  inv_mul_cancel := quotient.ind _ };
+  inv_mul_cancel := quotient.ind _,
+  ..loc.comm_ring β _ };
 { intros x hnx,
   cases x with x hx,
   cases hx with z hz,
@@ -456,7 +472,7 @@ or.cases_on (eq_zero_or_eq_zero_of_mul_eq_zero hz)
 
 theorem frac_int_to_rat_to_frac_int : ∀ f, frac_int_of_rat (frac_int_to_rat f) = f :=
 λ f, quotient.induction_on f $ λ ⟨r, s, hs⟩, quotient.sound
-⟨1, loc.is_submonoid.one_mem _,
+⟨1, is_submonoid.one_mem _,
    suffices (rat.mk r s).num * s = r * ↑(rat.mk r s).denom,
    from show 1 * ((rat.mk r s).num * s - r * ↑(rat.mk r s).denom) = 0,
      by simp [this],
