@@ -1051,7 +1051,7 @@ have h1 : _ := universal_property.factor_unique
 have h2 : _ := universal_property.factor_unique
   (is_bilinear_map.comp (proj.is_bilinear_map β γ) hg)
   g hg (λ x y, rfl),
-(congr_fun h1 z).trans (congr_fun h2 z).symm
+congr_fun (h1.trans h2.symm) z
 
 variables (β γ)
 
