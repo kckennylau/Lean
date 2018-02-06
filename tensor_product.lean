@@ -10,11 +10,91 @@ class type_singleton (α : Type u) : Type u :=
 (default : α)
 (unique : ∀ x : α, x = default)
 
+namespace type_singleton
+
+variables (α : Type u) [type_singleton α]
+variables (β : Type v) [type_singleton β]
+
+def equiv_unit : equiv α unit :=
+{ to_fun    := λ x, unit.star,
+  inv_fun   := λ x, type_singleton.default α,
+  left_inv  := λ x, by rw type_singleton.unique x,
+  right_inv := λ x, unit.cases_on x rfl }
+
+def equiv_singleton : equiv α β :=
+{ to_fun    := λ x, type_singleton.default β,
+  inv_fun   := λ x, type_singleton.default α,
+  left_inv  := λ x, by rw type_singleton.unique x,
+  right_inv := λ x, by rw type_singleton.unique x }
+
+end type_singleton
+
 @[simp] lemma quotient.lift_beta {α : Sort u} {β : Sort v} [s : setoid α] (f : α → β) (h : ∀ (a b : α), a ≈ b → f a = f b) (x : α):
 quotient.lift f h (quotient.mk x) = f x := rfl
 
 @[simp] lemma quotient.lift_on_beta {α : Sort u} {β : Sort v} [s : setoid α] (f : α → β) (h : ∀ (a b : α), a ≈ b → f a = f b) (x : α):
 quotient.lift_on (quotient.mk x) f h = f x := rfl
+
+section bilinear
+
+variables {α : Type u} [comm_ring α]
+include α
+
+variables {β : Type v} {γ : Type w} {α₁ : Type u₁}
+variables [module α β] [module α γ] [module α α₁]
+
+structure is_bilinear_map
+  {β γ α₁}
+  [module α β] [module α γ] [module α α₁]
+  (f : β → γ → α₁) : Prop :=
+(add_pair : ∀ x y z, f (x + y) z = f x z + f y z)
+(pair_add : ∀ x y z, f x (y + z) = f x y + f x z)
+(smul_trans : ∀ r₁ r₂ x y, f (r₁ • x) (r₂ • y) = (r₁ * r₂) • f x y)
+
+variables {f : β → γ → α₁} (hf : is_bilinear_map f)
+include hf
+
+theorem is_bilinear_map.smul_pair :
+  ∀ r x y, f (r • x) y = r • f x y :=
+λ r x y, by simpa using hf.smul_trans r 1 x y
+
+theorem is_bilinear_map.pair_smul :
+  ∀ r x y, f x (r • y) = r • f x y :=
+λ r x y, by simpa using hf.smul_trans 1 r x y
+
+omit hf
+
+variables (β γ)
+
+structure module_iso (β γ) [module α β] [module α γ] extends equiv β γ :=
+( linear : is_linear_map to_fun )
+
+end bilinear
+
+infix `≃ₘ`:50 := module_iso
+
+namespace module_iso
+
+variables (α : Type u) [comm_ring α]
+variables (β : Type v) (γ : Type w) (α₁ : Type u₁) [module α β] [module α γ] [module α α₁]
+
+variables {α β γ α₁}
+include α
+
+protected def refl : β ≃ₘ β :=
+{ linear := is_linear_map.id
+  ..equiv.refl β }
+
+protected def symm (hbc : β ≃ₘ γ) : γ ≃ₘ β :=
+{ linear := is_linear_map.inverse hbc.linear hbc.left_inv hbc.right_inv
+  ..equiv.symm hbc.to_equiv }
+
+protected def trans : β ≃ₘ γ → γ ≃ₘ α₁ → β ≃ₘ α₁ :=
+λ hbc hca,
+{ linear := is_linear_map.comp hca.linear hbc.linear
+  ..equiv.trans hbc.to_equiv hca.to_equiv }
+
+end module_iso
 
 theorem gsmul_sub (α : Type u) [add_group α] (a : α) :
   ∀ i j : int, gsmul a (i - j) = gsmul a i - gsmul a j :=
@@ -340,43 +420,47 @@ instance : setoid (free_abelian_group β γ) :=
 
 end tensor_product
 
-def tensor_product : Type (max v w) :=
+def tensor_product {α} (β γ) [comm_ring α] [module α β] [module α γ] : Type (max v w) :=
 quotient (tensor_product.setoid α β γ)
+
+local infix `⊗`:100 := tensor_product
 
 namespace tensor_product
 
-def add : tensor_product α β γ → tensor_product α β γ → tensor_product α β γ :=
-quotient.lift₂ (λ f g, ⟦f + g⟧ : free_abelian_group β γ → free_abelian_group β γ → tensor_product α β γ) $
+include α
+
+def add : β ⊗ γ → β ⊗ γ → β ⊗ γ :=
+quotient.lift₂ (λ f g, ⟦f + g⟧ : free_abelian_group β γ → free_abelian_group β γ → β ⊗ γ) $
 λ f₁ f₂ g₁ g₂ ⟨L₁, hL₁, hLfg₁⟩ ⟨L₂, hL₂, hLfg₂⟩, quotient.sound
 ⟨L₁ ++ L₂,
  λ x hx, by rw [list.mem_append] at hx; from or.cases_on hx (hL₁ x) (hL₂ x),
  by rw [list.sum_append, hLfg₁, hLfg₂]; simp⟩
 
-theorem add_assoc (f g h : tensor_product α β γ) : add α β γ (add α β γ f g) h = add α β γ f (add α β γ g h) :=
+theorem add_assoc (f g h : β ⊗ γ) : add α β γ (add α β γ f g) h = add α β γ f (add α β γ g h) :=
 quotient.induction_on₃ f g h $ λ m n k, quotient.sound $ by simp
 
-def zero : tensor_product α β γ := ⟦0⟧
+def zero : β ⊗ γ := ⟦0⟧
 
-theorem zero_add (f : tensor_product α β γ) : add α β γ (zero α β γ) f = f :=
+theorem zero_add (f : β ⊗ γ) : add α β γ (zero α β γ) f = f :=
 quotient.induction_on f $ λ m, quotient.sound $ by simp
 
-theorem add_zero (f : tensor_product α β γ) : add α β γ f (zero α β γ) = f :=
+theorem add_zero (f : β ⊗ γ) : add α β γ f (zero α β γ) = f :=
 quotient.induction_on f $ λ m, quotient.sound $ by simp
 
-def neg : tensor_product α β γ → tensor_product α β γ :=
-quotient.lift (λ f, ⟦-f⟧ : free_abelian_group β γ → tensor_product α β γ) $
+def neg : β ⊗ γ → β ⊗ γ :=
+quotient.lift (λ f, ⟦-f⟧ : free_abelian_group β γ → β ⊗ γ) $
 λ f g ⟨L, hL, hLfg⟩, quotient.sound ⟨L.map (λ x, -x),
   λ x hx, let ⟨y, hyL, hyx⟩ := list.exists_of_mem_map hx in
     by rw ← hyx; exact relators.neg_mem α β γ y (hL y hyL),
   by simp [list.map_neg, hLfg]⟩
 
-theorem add_left_neg (f : tensor_product α β γ) : add α β γ (neg α β γ f) f = zero α β γ :=
+theorem add_left_neg (f : β ⊗ γ) : add α β γ (neg α β γ f) f = zero α β γ :=
 quotient.induction_on f $ λ m, quotient.sound $ by simp
 
-theorem add_comm (f g : tensor_product α β γ) : add α β γ f g = add α β γ g f :=
+theorem add_comm (f g : β ⊗ γ) : add α β γ f g = add α β γ g f :=
 quotient.induction_on₂ f g $ λ m n, quotient.sound $ by simp
 
-instance : add_comm_group (tensor_product α β γ) :=
+instance : add_comm_group (β ⊗ γ) :=
 { add          := add α β γ,
   add_assoc    := add_assoc α β γ,
   zero         := zero α β γ,
@@ -429,8 +513,8 @@ begin
   simp [finsupp.sum]
 end
 
-def smul : α → tensor_product α β γ → tensor_product α β γ :=
-λ r, quotient.lift (λ f, ⟦f.sum (relators.smul_aux α β γ r)⟧ : free_abelian_group β γ → tensor_product α β γ) $
+def smul : α → β ⊗ γ → β ⊗ γ :=
+λ r, quotient.lift (λ f, ⟦f.sum (relators.smul_aux α β γ r)⟧ : free_abelian_group β γ → β ⊗ γ) $
 λ f g ⟨L, hL, hLfg⟩, quotient.sound
 begin
   clear _fun_match,
@@ -445,7 +529,8 @@ begin
       eq.symm (sub_zero _)⟩,
     specialize L_ih (eq.symm $ sub_zero _),
     rcases L_ih with ⟨L', hL', hLfg'⟩,
-    simp [sum_zero_index] at hLfg',
+    rw [sum_zero_index] at hLfg',
+    simp at hLfg',
     rcases hL L_hd (or.inl rfl) with h | h | h,
     { rcases h with ⟨x, y₁, y₂, n, h⟩,
       existsi list.cons (relators.pair_add α (r • x) y₁ y₂ n) L',
@@ -494,10 +579,10 @@ begin
         all_goals { intros, simp [relators.smul_aux], try {refl} } } } }
 end
 
-theorem smul_add (r : α) (f g : tensor_product α β γ) : smul α β γ r (add α β γ f g) = add α β γ (smul α β γ r f) (smul α β γ r g) :=
+theorem smul_add (r : α) (f g : β ⊗ γ) : smul α β γ r (add α β γ f g) = add α β γ (smul α β γ r f) (smul α β γ r g) :=
 quotient.induction_on₂ f g $ λ m n, quotient.sound $ by rw [finsupp.sum_add_index]; all_goals { intros, simp [relators.smul_aux], try {refl} }
 
-theorem add_smul (r₁ r₂ : α) (f : tensor_product α β γ) : smul α β γ (r₁ + r₂) f = add α β γ (smul α β γ r₁ f) (smul α β γ r₂ f) :=
+theorem add_smul (r₁ r₂ : α) (f : β ⊗ γ) : smul α β γ (r₁ + r₂) f = add α β γ (smul α β γ r₁ f) (smul α β γ r₂ f) :=
 quotient.induction_on f $ λ m, quotient.sound $
 begin
   unfold relators.smul_aux,
@@ -512,7 +597,11 @@ begin
   { intros m hS hSm,
     existsi id,
     split,
-    { simp [sum_zero_index] },
+    { simp,
+      rw sum_zero_index,
+      rw sum_zero_index,
+      rw sum_zero_index,
+      simp },
     { intros x hx,
       exfalso,
       exact hx } },
@@ -577,7 +666,7 @@ begin
         from hss' f' hf' } } }
 end
 
-theorem mul_smul (r₁ r₂ : α) (f : tensor_product α β γ) : smul α β γ (r₁ * r₂) f = smul α β γ r₁ (smul α β γ r₂ f) :=
+theorem mul_smul (r₁ r₂ : α) (f : β ⊗ γ) : smul α β γ (r₁ * r₂) f = smul α β γ r₁ (smul α β γ r₂ f) :=
 quotient.induction_on f $ λ m, quotient.sound $
 begin
   unfold relators.smul_aux,
@@ -592,7 +681,11 @@ begin
   apply finset.induction_on S,
   { intros m hS hSm,
     split,
-    { simp [sum_zero_index] },
+    { simp,
+      rw sum_zero_index,
+      rw sum_zero_index,
+      rw sum_zero_index,
+      simp },
     { intros x hx,
       exfalso,
       exact hx } },
@@ -630,41 +723,27 @@ begin
       exact relators.zero_mem α β γ } }
 end
 
-theorem one_smul (f : tensor_product α β γ) : smul α β γ 1 f = f :=
+theorem one_smul (f : β ⊗ γ) : smul α β γ 1 f = f :=
 quotient.induction_on f $ λ m, quotient.sound $ by simp [relators.smul_aux]
 
-instance : module α (tensor_product α β γ) :=
+instance : module α (β ⊗ γ) :=
 { smul     := smul α β γ,
   smul_add := smul_add α β γ,
   add_smul := add_smul α β γ,
   mul_smul := mul_smul α β γ,
   one_smul := one_smul α β γ }
 
-@[simp] lemma add_quot (f g : free_abelian_group β γ) : @has_add.add (tensor_product α β γ) _ (⟦f⟧ : tensor_product α β γ) ⟦g⟧ = ⟦f + g⟧ := rfl
-@[simp] lemma neg_quot (f : free_abelian_group β γ) : @has_neg.neg (tensor_product α β γ) _ (⟦f⟧ : tensor_product α β γ) = ⟦-f⟧ := rfl
+@[simp] lemma add_quot (f g : free_abelian_group β γ) : @has_add.add (β ⊗ γ) _ (⟦f⟧ : β ⊗ γ) ⟦g⟧ = ⟦f + g⟧ := rfl
+@[simp] lemma neg_quot (f : free_abelian_group β γ) : @has_neg.neg (β ⊗ γ) _ (⟦f⟧ : β ⊗ γ) = ⟦-f⟧ := rfl
 
 variables (β γ)
 
-def proj : β × γ → tensor_product α β γ :=
-λ z, ⟦finsupp.single z 1⟧
+def proj : β → γ → β ⊗ γ :=
+λ x y, ⟦finsupp.single (x, y) 1⟧
 
-variables α {β γ α₁}
-include α
+variables {α β γ α₁}
 
-class is_bilinear_map (f : β × γ → α₁) : Prop :=
-(add_pair : ∀ x y z, f (x + y, z) = f (x, z) + f (y, z))
-(pair_add : ∀ x y z, f (x, y + z) = f (x, y) + f (x, z))
-(smul_trans : ∀ r₁ r₂ x y, f (r₁ • x, r₂ • y) = (r₁ * r₂) • f (x, y))
-
-theorem is_bilinear_map.smul_pair (f : β × γ → α₁) [is_bilinear_map α f] :
-  ∀ r x y, f (r • x, y) = r • f (x, y) :=
-λ r x y, by simpa using is_bilinear_map.smul_trans f r 1 x y
-
-theorem is_bilinear_map.pair_smul (f : β × γ → α₁) [is_bilinear_map α f] :
-  ∀ r x y, f (x, r • y) = r • f (x, y) :=
-λ r x y, by simpa using is_bilinear_map.smul_trans f 1 r x y
-
-instance proj.is_bilinear_map : is_bilinear_map α (proj α β γ) :=
+def proj.is_bilinear_map : is_bilinear_map (proj α β γ) :=
 { add_pair   := λ x y z, quotient.sound $ setoid.symm $
     ⟨[(finsupp.single (x, z) 1 +
          finsupp.single (y, z) 1 -
@@ -699,18 +778,19 @@ instance proj.is_bilinear_map : is_bilinear_map α (proj α β γ) :=
 
 namespace universal_property
 
-variables (f : β × γ → α₁) [is_bilinear_map α f]
+variables {f : β → γ → α₁} (hf : is_bilinear_map f)
+include hf
 
 def factor_aux : free_abelian_group β γ → α₁ :=
-λ g : free_abelian_group β γ, (g.sum (λ z n, gsmul (f z) n))
+λ g : free_abelian_group β γ, (g.sum (λ z n, gsmul (f z.fst z.snd) n))
 
-theorem factor_equiv : ∀ g₁ g₂ : free_abelian_group β γ, g₁ ≈ g₂ → factor_aux α f g₁ = factor_aux α f g₂ :=
+theorem factor_equiv : ∀ g₁ g₂ : free_abelian_group β γ, g₁ ≈ g₂ → factor_aux hf g₁ = factor_aux hf g₂ :=
 λ g₁ g₂ ⟨L, hL, hgL⟩,
 begin
   clear _fun_match _x,
   induction L generalizing hgL hL g₂ g₁,
   { simp at hgL,
-    replace hgL := eq.symm hgL,
+    replace hgL := hgL.symm,
     rw add_neg_eq_zero at hgL,
     rw hgL },
   { specialize L_ih (L_tl.sum) 0,
@@ -739,7 +819,7 @@ begin
       rw finsupp.sum_single_index,
       rw ← add_gsmul,
       rw ← sub_gsmul,
-      rw is_bilinear_map.pair_add α f,
+      rw hf.pair_add,
       simp,
       { rw gsmul_zero },
       { rw gsmul_zero },
@@ -757,7 +837,7 @@ begin
       rw finsupp.sum_single_index,
       rw ← add_gsmul,
       rw ← sub_gsmul,
-      rw is_bilinear_map.add_pair α f,
+      rw hf.add_pair,
       simp,
       { rw gsmul_zero },
       { rw gsmul_zero },
@@ -772,8 +852,8 @@ begin
       rw finsupp.sum_single_index,
       rw finsupp.sum_single_index,
       rw ← sub_gsmul,
-      rw is_bilinear_map.smul_pair α f,
-      rw is_bilinear_map.pair_smul α f,
+      rw hf.smul_pair,
+      rw hf.pair_smul,
       simp,
       { rw gsmul_zero },
       { rw gsmul_zero },
@@ -783,12 +863,10 @@ begin
     { intros, rw gsmul_sub } }
 end
 
-def factor : tensor_product α β γ → α₁ :=
-quotient.lift
-  (universal_property.factor_aux α f)
-  (universal_property.factor_equiv α f)
+def factor : β ⊗ γ → α₁ :=
+quotient.lift (factor_aux hf) (factor_equiv hf)
 
-theorem factor_add : ∀ g₁ g₂ : tensor_product α β γ, factor α f (g₁ + g₂) = factor α f g₁ + factor α f g₂ :=
+theorem factor_add : ∀ g₁ g₂ : β ⊗ γ, factor hf (g₁ + g₂) = factor hf g₁ + factor hf g₂ :=
 λ x y, quotient.induction_on₂ x y
 begin
   intros m n,
@@ -799,7 +877,7 @@ begin
   { intros, rw gsmul_add }
 end
 
-theorem factor_smul : ∀ (r : α) (g : tensor_product α β γ), factor α f (r • g) = r • factor α f g :=
+theorem factor_smul : ∀ (r : α) (g : β ⊗ γ), factor hf (r • g) = r • factor hf g :=
 λ r x, quotient.induction_on x
 begin
   intros m,
@@ -836,7 +914,7 @@ begin
     rw finsupp.sum_single_index,
     rw finsupp.sum_single_index,
     rw finsupp.sum_single_index,
-    rw is_bilinear_map.smul_pair α f,
+    rw hf.smul_pair,
     rw gsmul_smul,
     rw module.smul_add,
     { rw gsmul_zero },
@@ -851,105 +929,110 @@ begin
     { exact hnT } }
 end
 
-end universal_property
+theorem factor_linear : is_linear_map (factor hf) :=
+{ add  := factor_add hf,
+  smul := factor_smul hf }
 
-theorem universal_property (f : β × γ → α₁) [is_bilinear_map α f] :
-  type_singleton { h : tensor_product α β γ → α₁ // ∃ (H : is_linear_map h), h ∘ proj α β γ = f } :=
-{ default := ⟨universal_property.factor α f,
-    { add  := universal_property.factor_add α f,
-      smul := universal_property.factor_smul α f },
-    begin
-      funext,
-      cases x with x y,
-      simp [function.comp, proj, universal_property.factor],
-      simp [universal_property.factor_aux],
-      simp [finsupp.sum_single_index]
-    end⟩,
-  unique  :=
-    begin
-      intro x,
-      rcases x with ⟨h, H, hf⟩,
-      apply subtype.eq,
-      dsimp,
-      apply funext,
-      intro x,
-      apply quotient.induction_on x,
-      intro y,
-      unfold universal_property.factor,
-      unfold universal_property.factor_aux,
-      simp,
-      rcases structural_theorem β γ y with ⟨S, hS, hSy⟩,
-      revert hSy hS y,
-      apply finset.induction_on S,
-      { intros y hS hSy,
-        rw ← hSy,
-        rw finset.sum_empty,
-        rw sum_zero_index',
-        exact is_linear_map.zero H },
-      { intros n T hnT ih y hS hSy,
-        rw ← hSy,
-        rw finset.sum_insert,
+theorem factor_commutes : ∀ x y, factor hf (proj α β γ x y) = f x y :=
+begin
+  funext,
+  simp [function.comp, proj, factor, factor_aux],
+  simp [finsupp.sum_single_index]
+end
+
+theorem factor_unique (h : β ⊗ γ → α₁) (H : is_linear_map h)
+  (hh : ∀ x y, h (proj α β γ x y) = f x y) :
+  h = factor hf :=
+begin
+  apply funext,
+  intro x,
+  apply quotient.induction_on x,
+  intro y,
+  unfold universal_property.factor,
+  unfold universal_property.factor_aux,
+  simp,
+  rcases structural_theorem β γ y with ⟨S, hS, hSy⟩,
+  revert hSy hS y,
+  apply finset.induction_on S,
+  { intros y hS hSy,
+    rw ← hSy,
+    rw finset.sum_empty,
+    rw sum_zero_index',
+    exact is_linear_map.zero H },
+  { intros n T hnT ih y hS hSy,
+    rw ← hSy,
+    rw finset.sum_insert,
+    rw ← add_quot,
+    rw H.add,
+    rw finsupp.sum_add_index,
+    rw id.def,
+    specialize ih (T.sum id),
+    specialize ih (λ z hz, hS z (finset.mem_insert_of_mem hz)),
+    specialize ih rfl,
+    rw ih,
+    specialize hS n,
+    specialize hS (finset.mem_insert_self n T),
+    rcases hS with ⟨x', y', n', H', hn'⟩,
+    rw hn',
+    rw finsupp.sum_single_index,
+    specialize hh x' y',
+    simp [function.comp, proj] at hh,
+    clear H' hn',
+    suffices : h ⟦finsupp.single (x', y') n'⟧ = gsmul (f x' y') n',
+    { rw this },
+    cases n',
+    { induction n' with n' ih',
+      { rw int.of_nat_zero,
+        rw finsupp.single_zero,
+        rw gsmul_zero,
+        exact H.zero },
+      { rw int.of_nat_succ,
+        rw finsupp.single_add,
         rw ← add_quot,
         rw H.add,
-        rw finsupp.sum_add_index,
-        rw id.def,
-        specialize ih (T.sum id),
-        specialize ih (λ z hz, hS z (finset.mem_insert_of_mem hz)),
-        specialize ih rfl,
-        rw ih,
-        specialize hS n,
-        specialize hS (finset.mem_insert_self n T),
-        rcases hS with ⟨x', y', n', H', hn'⟩,
-        rw hn',
-        rw finsupp.sum_single_index,
-        replace hf := congr_fun hf (x', y'),
-        simp [function.comp, proj] at hf,
-        clear H' hn',
-        suffices : h ⟦finsupp.single (x', y') n'⟧ = gsmul (f (x', y')) n',
-        { rw this },
-        cases n',
-        { induction n' with n' ih',
-          { rw int.of_nat_zero,
-            rw finsupp.single_zero,
-            rw gsmul_zero,
-            exact H.zero },
-          { rw int.of_nat_succ,
-            rw finsupp.single_add,
-            rw ← add_quot,
-            rw H.add,
-            rw [ih', hf],
-            rw gsmul_add,
-            rw gsmul_one } },
-        { induction n' with n' ih',
-          { rw int.neg_succ_of_nat_eq,
-            rw finsupp.single_neg,
-            rw gsmul_neg,
-            rw finsupp.single_add,
-            simp,
-            rw ← neg_quot,
-            rw H.neg,
-            rw hf },
-          { rw int.neg_succ_of_nat_coe,
-            rw int.neg_succ_of_nat_eq at ih',
-            rw int.coe_nat_add,
-            rw finsupp.single_neg at ih' ⊢,
-            rw ← neg_quot at ih' ⊢,
-            rw H.neg at ih' ⊢,
-            rw nat.succ_eq_add_one,
-            rw finsupp.single_add,
-            rw ← add_quot,
-            rw H.add,
-            rw neg_add,
-            rw int.coe_nat_add,
-            rw int.coe_nat_eq 1,
-            rw int.of_nat_one,
-            rw ih',
-            rw hf,
-            simp [gsmul_add, gsmul_neg] } },
-        { rw gsmul_zero },
-        { intros, rw gsmul_zero },
-        { intros, rw gsmul_add },
-        { exact hnT } }
-    end }
+        rw [ih', hh],
+        rw gsmul_add,
+        rw gsmul_one } },
+    { induction n' with n' ih',
+      { rw int.neg_succ_of_nat_eq,
+        rw finsupp.single_neg,
+        rw gsmul_neg,
+        rw finsupp.single_add,
+        simp,
+        rw ← neg_quot,
+        rw H.neg,
+        rw hh },
+      { rw int.neg_succ_of_nat_coe,
+        rw int.neg_succ_of_nat_eq at ih',
+        rw int.coe_nat_add,
+        rw finsupp.single_neg at ih' ⊢,
+        rw ← neg_quot at ih' ⊢,
+        rw H.neg at ih' ⊢,
+        rw nat.succ_eq_add_one,
+        rw finsupp.single_add,
+        rw ← add_quot,
+        rw H.add,
+        rw neg_add,
+        rw int.coe_nat_add,
+        rw int.coe_nat_eq 1,
+        rw int.of_nat_one,
+        rw ih',
+        rw hh,
+        simp [gsmul_add, gsmul_neg] } },
+    { rw gsmul_zero },
+    { intros, rw gsmul_zero },
+    { intros, rw gsmul_add },
+    { exact hnT } }
+end
+
+end universal_property
+
+instance universal_property {f : β → γ → α₁} (hf : is_bilinear_map f) :
+  type_singleton { h : β ⊗ γ → α₁ // ∃ (H : is_linear_map h), ∀ x y, h (proj α β γ x y) = f x y } :=
+{ default := ⟨universal_property.factor hf,
+    universal_property.factor_linear hf,
+    universal_property.factor_commutes hf⟩,
+  unique  := λ ⟨h, H, hh⟩, subtype.eq $
+    universal_property.factor_unique hf h H hh }
 
 end tensor_product
