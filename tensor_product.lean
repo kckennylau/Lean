@@ -1,10 +1,31 @@
-import algebra.group_power algebra.module data.finsupp data.set.basic tactic.ring
+import algebra.group_power algebra.linear_algebra.prod_module algebra.module
+import data.finsupp data.set.basic tactic.ring
 noncomputable theory
 
 universes u u₁ v v₁ w
 
 open classical set function
 local attribute [instance] decidable_inhabited prop_decidable
+
+namespace prod
+
+@[simp] lemma prod_add_prod {α : Type u} {β : Type v} {γ : Type w}
+  [comm_ring α] [module α β] [module α γ] (x₁ x₂ : β) (y₁ y₂ : γ) :
+  (x₁, y₁) + (x₂, y₂) = (x₁ + x₂, y₁ + y₂) := rfl
+
+@[simp] lemma smul_prod {α : Type u} {β : Type v} {γ : Type w}
+  [comm_ring α] [module α β] [module α γ] (r : α) (x : β) (y : γ) :
+  r • (x, y) = (r • x, r • y) := rfl
+
+@[simp] lemma fst_smul {α : Type u} {β : Type v} {γ : Type w}
+  [comm_ring α] [module α β] [module α γ] (r : α) (z : β × γ) :
+  (r • z).fst = r • z.fst := rfl
+
+@[simp] lemma snd_smul {α : Type u} {β : Type v} {γ : Type w}
+  [comm_ring α] [module α β] [module α γ] (r : α) (z : β × γ) :
+  (r • z).snd = r • z.snd := rfl
+
+end prod
 
 class type_singleton (α : Type u) : Type u :=
 (default : α)
@@ -62,6 +83,16 @@ theorem is_bilinear_map.pair_smul :
   ∀ r x y, f x (r • y) = r • f x y :=
 λ r x y, by simpa using hf.smul_trans 1 r x y
 
+theorem is_bilinear_map.zero_pair : ∀ y, f 0 y = 0 :=
+λ y, calc f 0 y
+        = f (0 + 0) y - f 0 y : by rw [hf.add_pair 0 0 y]; simp
+    ... = 0 : by simp
+
+theorem is_bilinear_map.pair_zero : ∀ x, f x 0 = 0 :=
+λ x, calc f x 0
+        = f x (0 + 0) - f x 0 : by rw [hf.pair_add x 0 0]; simp
+    ... = 0 : by simp
+
 variables {g : α₁ → β₁} (hg : is_linear_map g)
 include hg
 
@@ -79,7 +110,7 @@ structure module_iso (β γ) [module α β] [module α γ] extends equiv β γ :
 
 end bilinear
 
-infix ` ≃ₘ `:50 := module_iso
+infix ` ≃ₘ `:25 := module_iso
 
 namespace module_iso
 
@@ -444,15 +475,15 @@ quotient.lift₂ (λ f g, ⟦f + g⟧ : free_abelian_group β γ → free_abelia
  λ x hx, by rw [list.mem_append] at hx; from or.cases_on hx (hL₁ x) (hL₂ x),
  by rw [list.sum_append, hLfg₁, hLfg₂]; simp⟩
 
-theorem add_assoc (f g h : β ⊗ γ) : add α β γ (add α β γ f g) h = add α β γ f (add α β γ g h) :=
+protected theorem add_assoc (f g h : β ⊗ γ) : add α β γ (add α β γ f g) h = add α β γ f (add α β γ g h) :=
 quotient.induction_on₃ f g h $ λ m n k, quotient.sound $ by simp
 
 def zero : β ⊗ γ := ⟦0⟧
 
-theorem zero_add (f : β ⊗ γ) : add α β γ (zero α β γ) f = f :=
+protected theorem zero_add (f : β ⊗ γ) : add α β γ (zero α β γ) f = f :=
 quotient.induction_on f $ λ m, quotient.sound $ by simp
 
-theorem add_zero (f : β ⊗ γ) : add α β γ f (zero α β γ) = f :=
+protected theorem add_zero (f : β ⊗ γ) : add α β γ f (zero α β γ) = f :=
 quotient.induction_on f $ λ m, quotient.sound $ by simp
 
 def neg : β ⊗ γ → β ⊗ γ :=
@@ -462,21 +493,21 @@ quotient.lift (λ f, ⟦-f⟧ : free_abelian_group β γ → β ⊗ γ) $
     by rw ← hyx; exact relators.neg_mem α β γ y (hL y hyL),
   by simp [list.map_neg, hLfg]⟩
 
-theorem add_left_neg (f : β ⊗ γ) : add α β γ (neg α β γ f) f = zero α β γ :=
+protected theorem add_left_neg (f : β ⊗ γ) : add α β γ (neg α β γ f) f = zero α β γ :=
 quotient.induction_on f $ λ m, quotient.sound $ by simp
 
-theorem add_comm (f g : β ⊗ γ) : add α β γ f g = add α β γ g f :=
+protected theorem add_comm (f g : β ⊗ γ) : add α β γ f g = add α β γ g f :=
 quotient.induction_on₂ f g $ λ m n, quotient.sound $ by simp
 
 instance : add_comm_group (β ⊗ γ) :=
 { add          := add α β γ,
-  add_assoc    := add_assoc α β γ,
+  add_assoc    := tensor_product.add_assoc α β γ,
   zero         := zero α β γ,
-  zero_add     := zero_add α β γ,
-  add_zero     := add_zero α β γ,
+  zero_add     := tensor_product.zero_add α β γ,
+  add_zero     := tensor_product.add_zero α β γ,
   neg          := neg α β γ,
-  add_left_neg := add_left_neg α β γ,
-  add_comm     := add_comm α β γ }
+  add_left_neg := tensor_product.add_left_neg α β γ,
+  add_comm     := tensor_product.add_comm α β γ }
 
 theorem mem_closure_of_finset {f : free_abelian_group β γ} :
   (∃ (S : finset (free_abelian_group β γ)) g,
@@ -749,6 +780,7 @@ variables {α} (β γ)
 def proj : β → γ → β ⊗ γ :=
 λ x y, ⟦finsupp.single (x, y) 1⟧
 
+
 def proj.is_bilinear_map : is_bilinear_map (proj β γ) :=
 { add_pair   := λ x y z, quotient.sound $ setoid.symm $
     ⟨[(finsupp.single (x, z) 1 +
@@ -781,6 +813,12 @@ def proj.is_bilinear_map : is_bilinear_map (proj β γ) :=
       { rw finsupp.single_zero,
         refl }
     end }
+
+@[simp] lemma proj.zero_pair {y : γ} : proj β γ 0 y = 0 :=
+(proj.is_bilinear_map β γ).zero_pair y
+
+@[simp] lemma proj.pair_zero {x : β} : proj β γ x 0 = 0 :=
+(proj.is_bilinear_map β γ).pair_zero x
 
 namespace universal_property
 
@@ -1111,5 +1149,112 @@ have hgg3 : _ := tensor_product.ext hgg2 is_linear_map.id hgg1,
   left_inv  := hbb3,
   right_inv := hgg3,
   linear    := hbg4 }
+
+protected def prod_tensor : (β × γ) ⊗ α₁ ≃ₘ β ⊗ α₁ × γ ⊗ α₁ :=
+let ha1 : β × γ → α₁ → β ⊗ α₁ × γ ⊗ α₁ :=
+  λ z r, (proj β α₁ z.fst r, proj γ α₁ z.snd r) in
+have ha2 : is_bilinear_map ha1, from
+{ add_pair   := λ x y z, prod.ext.2
+    ⟨(proj.is_bilinear_map β α₁).add_pair x.fst y.fst z,
+     (proj.is_bilinear_map γ α₁).add_pair x.snd y.snd z⟩,
+  pair_add   := λ x y z, prod.ext.2
+    ⟨(proj.is_bilinear_map β α₁).pair_add x.fst y z,
+     (proj.is_bilinear_map γ α₁).pair_add x.snd y z⟩,
+  smul_trans := λ r₁ r₂ x y, prod.ext.2
+    ⟨(proj.is_bilinear_map β α₁).smul_trans r₁ r₂ x.fst y,
+     (proj.is_bilinear_map γ α₁).smul_trans r₁ r₂ x.snd y⟩ },
+let ha3 : (β × γ) ⊗ α₁ → β ⊗ α₁ × γ ⊗ α₁ :=
+  universal_property.factor ha2 in
+have ha4 : _ := universal_property.factor_linear ha2,
+have ha5 : _ := universal_property.factor_commutes ha2,
+let hb1 : β → α₁ → (β × γ) ⊗ α₁ :=
+  λ x r, proj (β × γ) α₁ (x, 0) r in
+have hb2 : is_bilinear_map hb1, from
+{ add_pair   := λ x y z, calc
+          proj (β × γ) α₁ (x + y, 0) z
+        = proj (β × γ) α₁ (x + y, 0 + 0) z : congr_arg (λ r, proj (β × γ) α₁ (x + y, r) z) (zero_add 0).symm
+    ... = proj (β × γ) α₁ (x, 0) z + proj (β × γ) α₁ (y, 0) z : (proj.is_bilinear_map (β × γ) α₁).add_pair (x, 0) (y, 0) z,
+  pair_add   := λ x y z, (proj.is_bilinear_map (β × γ) α₁).pair_add (x, 0) y z,
+  smul_trans := λ r₁ r₂ x y, calc
+          proj (β × γ) α₁ (r₁ • x, 0) (r₂ • y)
+        = proj (β × γ) α₁ (r₁ • x, r₁ • 0) (r₂ • y) : congr_arg (λ m, proj (β × γ) α₁ (r₁ • x, m) (r₂ • y)) smul_zero.symm
+    ... = (r₁ * r₂) • proj (β × γ) α₁ (x, 0) y : (proj.is_bilinear_map (β × γ) α₁).smul_trans r₁ r₂ (x, 0) y },
+let hb3 : β ⊗ α₁ → (β × γ) ⊗ α₁ :=
+  universal_property.factor hb2 in
+have hb4 : _ := universal_property.factor_linear hb2,
+have hb5 : _ := universal_property.factor_commutes hb2,
+have hb6 : ∀ x, ha3 (hb3 x) = prod.inl x := tensor_product.ext (ha4.comp hb4) (prod.is_linear_map_prod_inl) $ λ x y, calc
+          ha3 (hb3 (proj β α₁ x y))
+        = ha3 (proj (β × γ) α₁ (x, 0) y) : congr_arg ha3 (hb5 x y)
+    ... = (proj β α₁ x y, proj γ α₁ 0 y) : ha5 (x, 0) y
+    ... = (proj β α₁ x y, 0) : congr_arg (λ z, (proj β α₁ x y, z)) (proj.zero_pair γ α₁),
+let hc1 : γ → α₁ → (β × γ) ⊗ α₁ :=
+  λ x r, proj (β × γ) α₁ (0, x) r in
+have hc2 : is_bilinear_map hc1, from
+{ add_pair   := λ x y z, calc
+          proj (β × γ) α₁ (0, x + y) z
+        = proj (β × γ) α₁ (0 + 0, x + y) z : congr_arg (λ r, proj (β × γ) α₁ (r, x + y) z) (zero_add 0).symm
+    ... = proj (β × γ) α₁ (0, x) z + proj (β × γ) α₁ (0, y) z : (proj.is_bilinear_map (β × γ) α₁).add_pair (0, x) (0, y) z,
+  pair_add   := λ x y z, (proj.is_bilinear_map (β × γ) α₁).pair_add (0, x) y z,
+  smul_trans := λ r₁ r₂ x y, calc
+          proj (β × γ) α₁ (0, r₁ • x) (r₂ • y)
+        = proj (β × γ) α₁ (r₁ • 0, r₁ • x) (r₂ • y) : congr_arg (λ m, proj (β × γ) α₁ (m, r₁ • x) (r₂ • y)) smul_zero.symm
+    ... = (r₁ * r₂) • proj (β × γ) α₁ (0, x) y : (proj.is_bilinear_map (β × γ) α₁).smul_trans r₁ r₂ (0, x) y },
+let hc3 : γ ⊗ α₁ → (β × γ) ⊗ α₁ :=
+  universal_property.factor hc2 in
+have hc4 : _ := universal_property.factor_linear hc2,
+have hc5 : _ := universal_property.factor_commutes hc2,
+have hc6 : ∀ y, ha3 (hc3 y) = prod.inr y := tensor_product.ext (ha4.comp hc4) (prod.is_linear_map_prod_inr) $ λ x y, calc
+          ha3 (hc3 (proj γ α₁ x y))
+        = ha3 (proj (β × γ) α₁ (0, x) y) : congr_arg ha3 (hc5 x y)
+    ... = (proj β α₁ 0 y, proj γ α₁ x y) : ha5 (0, x) y
+    ... = (0, proj γ α₁ x y) : congr_arg (λ z, (z, proj γ α₁ x y)) (proj.zero_pair β α₁),
+let hd1 : β ⊗ α₁ × γ ⊗ α₁ → (β × γ) ⊗ α₁ :=
+  λ z, hb3 z.fst + hc3 z.snd in
+have hd2 : is_linear_map hd1, from
+{ add  := λ x y, calc
+          hb3 (x + y).fst + hc3 (x + y).snd
+        = hb3 (x.fst + y.fst) + hc3 (x.snd + y.snd) : rfl
+    ... = (hb3 x.fst + hb3 y.fst) + hc3 (x.snd + y.snd) : congr_arg (λ z, z + hc3 (x.snd + y.snd)) (hb4.add x.fst y.fst)
+    ... = (hb3 x.fst + hb3 y.fst) + (hc3 x.snd + hc3 y.snd) : congr_arg (λ z, (hb3 x.fst + hb3 y.fst) + z) (hc4.add x.snd y.snd)
+    ... = hb3 x.fst + (hb3 y.fst + (hc3 x.snd + hc3 y.snd)) : add_assoc _ _ _
+    ... = hb3 x.fst + ((hc3 x.snd + hc3 y.snd) + hb3 y.fst) : congr_arg _ (add_comm _ _)
+    ... = hb3 x.fst + (hc3 x.snd + (hc3 y.snd + hb3 y.fst)) : congr_arg _ (add_assoc _ _ _)
+    ... = hb3 x.fst + (hc3 x.snd + (hb3 y.fst + hc3 y.snd)) : by have := congr_arg (λ z, hb3 x.fst + (hc3 x.snd + z)) (add_comm (hc3 y.snd) (hb3 y.fst)); dsimp at this; exact this
+    ... = (hb3 x.fst + hc3 x.snd) + (hb3 y.fst + hc3 y.snd) : eq.symm $ add_assoc _ _ _,
+  smul := λ r x, by simp only [hd1, hb3, hc3]; rw [prod.fst_smul, prod.snd_smul, hb4.smul, hc4.smul, smul_add] },
+have h1 : is_linear_map (hd1 ∘ ha3), from hd2.comp ha4,
+have h2 : _ := tensor_product.ext h1 is_linear_map.id (λ x y, by simp [function.comp, *, ((proj.is_bilinear_map (β × γ) α₁).add_pair _ _ _).symm]),
+have h3 : ∀ z, (ha3 ∘ hd1) z = id z, from λ z, calc
+        ha3 (hd1 z)
+      = ha3 (hb3 z.fst + hc3 z.snd) : rfl
+  ... = ha3 (hb3 z.fst) + ha3 (hc3 z.snd) : ha4.add _ _
+  ... = prod.inl z.fst + prod.inr z.snd : by rw [hb6, hc6]
+  ... = (z.fst + 0, 0 + z.snd) : rfl
+  ... = z : by cases z; simp [prod.inl, prod.inr],
+{ to_fun    := ha3,
+  inv_fun   := hd1,
+  left_inv  := h2,
+  right_inv := h3,
+  linear    := ha4 }
+
+
+
+
+
+
+
+protected def assoc : (β ⊗ γ) ⊗ α₁ ≃ₘ β ⊗ (γ ⊗ α₁) :=
+let ha1 (z : α₁) : β → γ → β ⊗ (γ ⊗ α₁) :=
+  λ x y, proj _ _ x (proj _ _ y z) in
+have ha2 : Π (z : α₁), is_bilinear_map (ha1 z), from λ z,
+{ add_pair   := λ m n k, (proj.is_bilinear_map β (γ ⊗ α₁)).add_pair _ _ _,
+  pair_add   := λ m n k, calc
+          proj _ _ m (proj _ _ (n + k) z)
+        = proj _ _ m (proj _ _ n z + proj _ _ k z) : congr_arg (λ b, proj β (γ ⊗ α₁) m b) ((proj.is_bilinear_map γ α₁).add_pair _ _ _)
+    ... = proj _ _ m (proj _ _ n z) + proj _ _ m (proj _ _ k z) : (proj.is_bilinear_map β (γ ⊗ α₁)).pair_add _ _ _,
+  smul_trans := λ r₁ r₂ m n, calc
+          proj _ _ (r₁ • m) (proj _ _ (r₂ • n) z)},
+sorry
 
 end tensor_product
