@@ -775,7 +775,7 @@ def tprod : β → γ → β ⊗ γ :=
 
 infix ` ⊗ₛ `:100 := tprod
 
-variables (r r₁ r₂ : α) (x x₁ x₂ : β) (y y₁ y₂ : γ)
+variables {r r₁ r₂ : α} {x x₁ x₂ : β} {y y₁ y₂ : γ}
 
 theorem tprod_unfold : x ⊗ₛ y = tprod x y := rfl
 
@@ -1116,14 +1116,14 @@ have hba4 : _ := universal_property.factor_linear hba2,
 have hba5 : _ := universal_property.factor_commutes hba2,
 let hb1 : β → β ⊗ α := λ x, x ⊗ₛ 1 in
 have hb2 : is_linear_map hb1, from
-{ add  := λ x y, add_tprod x y 1,
-  smul := λ r x, smul_tprod r x 1 },
+{ add  := λ x y, add_tprod,
+  smul := λ r x, smul_tprod },
 have hbb1 : ∀ (x : β) (y : α), hb1 (hba3 (x ⊗ₛ y)) = x ⊗ₛ y,
 from λ x y, calc
         hb1 (hba3 (x ⊗ₛ y))
       = (y • x) ⊗ₛ 1 : congr_arg hb1 (hba5 _ _)
-  ... = y • x ⊗ₛ 1 : smul_tprod y x 1
-  ... = x ⊗ₛ (y • 1) : eq.symm $ tprod_smul y x 1
+  ... = y • x ⊗ₛ 1 : smul_tprod
+  ... = x ⊗ₛ (y • 1) : eq.symm $ tprod_smul
   ... = x ⊗ₛ y : by simp,
 { to_fun    := hba3,
   inv_fun   := hb1,
@@ -1134,19 +1134,19 @@ from λ x y, calc
 protected def comm : β ⊗ γ ≃ₘ γ ⊗ β :=
 let hbg1 : β → γ → γ ⊗ β := λ x y, y ⊗ₛ x in
 have hbg2 : is_bilinear_map hbg1, from
-{ add_pair  := λ x y z, tprod_add z x y,
-  pair_add  := λ x y z, add_tprod y z x,
-  smul_pair := λ r x y, tprod_smul r y x,
-  pair_smul := λ r x y, smul_tprod r y x },
+{ add_pair  := λ x y z, tprod_add,
+  pair_add  := λ x y z, add_tprod,
+  smul_pair := λ r x y, tprod_smul,
+  pair_smul := λ r x y, smul_tprod },
 let hbg3 : β ⊗ γ → γ ⊗ β := universal_property.factor hbg2 in
 have hbg4 : _ := universal_property.factor_linear hbg2,
 have hbg5 : _ := universal_property.factor_commutes hbg2,
 let hgb1 : γ → β → β ⊗ γ := λ y x , x ⊗ₛ y in
 have hgb2 : is_bilinear_map hgb1, from
-{ add_pair  := λ x y z, tprod_add z x y,
-  pair_add  := λ x y z, add_tprod y z x,
-  smul_pair := λ r x y, tprod_smul r y x,
-  pair_smul := λ r x y, smul_tprod r y x },
+{ add_pair  := λ x y z, tprod_add,
+  pair_add  := λ x y z, add_tprod,
+  smul_pair := λ r x y, tprod_smul,
+  pair_smul := λ r x y, smul_tprod },
 let hgb3 : γ ⊗ β → β ⊗ γ := universal_property.factor hgb2 in
 have hgb4 : _ := universal_property.factor_linear hgb2,
 have hgb5 : _ := universal_property.factor_commutes hgb2,
@@ -1168,10 +1168,10 @@ protected def prod_tensor : (β × γ) ⊗ α₁ ≃ₘ β ⊗ α₁ × γ ⊗ �
 let ha1 : β × γ → α₁ → β ⊗ α₁ × γ ⊗ α₁ :=
   λ z r, (z.fst ⊗ₛ r, z.snd ⊗ₛ r) in
 have ha2 : is_bilinear_map ha1, from
-{ add_pair  := λ x y z, prod.ext.2 ⟨add_tprod x.fst y.fst z, add_tprod x.snd y.snd z⟩,
-  pair_add  := λ x y z, prod.ext.2 ⟨tprod_add x.fst y z, tprod_add x.snd y z⟩,
-  smul_pair := λ r x y, prod.ext.2 ⟨smul_tprod r x.fst y, smul_tprod r x.snd y⟩ ,
-  pair_smul := λ r x y, prod.ext.2 ⟨tprod_smul r x.fst y, tprod_smul r x.snd y⟩ },
+{ add_pair  := λ x y z, prod.ext.2 ⟨add_tprod, add_tprod⟩,
+  pair_add  := λ x y z, prod.ext.2 ⟨tprod_add, tprod_add⟩,
+  smul_pair := λ r x y, prod.ext.2 ⟨smul_tprod, smul_tprod⟩ ,
+  pair_smul := λ r x y, prod.ext.2 ⟨tprod_smul, tprod_smul⟩ },
 let ha3 : (β × γ) ⊗ α₁ → β ⊗ α₁ × γ ⊗ α₁ :=
   universal_property.factor ha2 in
 have ha4 : _ := universal_property.factor_linear ha2,
@@ -1182,13 +1182,14 @@ have hb2 : is_bilinear_map hb1, from
 { add_pair  := λ x y z, calc
           (x + y, (0:γ)) ⊗ₛ z
         = (x + y, 0 + 0) ⊗ₛ z : congr_arg (λ r, (x + y, r) ⊗ₛ z) (zero_add 0).symm
-    ... = (x, 0) ⊗ₛ z + (y, 0) ⊗ₛ z : add_tprod (x, 0) (y, 0) z,
-  pair_add  := λ x y z, tprod_add (x, 0) y z,
+    ... = ((x, 0) + (y, 0)) ⊗ₛ z : rfl
+    ... = (x, 0) ⊗ₛ z + (y, 0) ⊗ₛ z : add_tprod,
+  pair_add  := λ x y z, tprod_add,
   smul_pair := λ r x y, calc
           (r • x, (0:γ)) ⊗ₛ y
         = (r • (x, 0)) ⊗ₛ y : by simp only [prod.smul_prod, smul_zero]
-    ... = r • (x, 0) ⊗ₛ y : smul_tprod r (x, 0) y,
-  pair_smul := λ r x y, tprod_smul r (x, 0) y },
+    ... = r • (x, 0) ⊗ₛ y : smul_tprod,
+  pair_smul := λ r x y, tprod_smul },
 let hb3 : β ⊗ α₁ → (β × γ) ⊗ α₁ :=
   universal_property.factor hb2 in
 have hb4 : _ := universal_property.factor_linear hb2,
@@ -1197,20 +1198,21 @@ have hb6 : ∀ x, ha3 (hb3 x) = prod.inl x := tensor_product.ext (ha4.comp hb4) 
           ha3 (hb3 (x ⊗ₛ y))
         = ha3 ((x, 0) ⊗ₛ y) : congr_arg ha3 (hb5 x y)
     ... = (x ⊗ₛ y, 0 ⊗ₛ y) : ha5 (x, 0) y
-    ... = (x ⊗ₛ y, 0) : congr_arg (λ z, (x ⊗ₛ y, z)) (zero_tprod y),
+    ... = (x ⊗ₛ y, 0) : congr_arg (λ z, (x ⊗ₛ y, z)) zero_tprod,
 let hc1 : γ → α₁ → (β × γ) ⊗ α₁ :=
   λ x r, (0, x) ⊗ₛ r in
 have hc2 : is_bilinear_map hc1, from
 { add_pair   := λ x y z, calc
           ((0:β), x + y) ⊗ₛ z
         = (0 + 0, x + y) ⊗ₛ z : congr_arg (λ r, (r, x + y) ⊗ₛ z) (zero_add 0).symm
-    ... = (0, x) ⊗ₛ z + (0, y) ⊗ₛ z : add_tprod (0, x) (0, y) z,
-  pair_add   := λ x y z, tprod_add (0, x) y z,
+    ... = ((0, x) + (0, y)) ⊗ₛ z : rfl
+    ... = (0, x) ⊗ₛ z + (0, y) ⊗ₛ z : add_tprod,
+  pair_add   := λ x y z, tprod_add,
   smul_pair := λ r x y, calc
           ((0:β), r • x) ⊗ₛ y
         = (r • (0, x)) ⊗ₛ y : by simp only [prod.smul_prod, smul_zero]
-    ... = r • (0, x) ⊗ₛ y : smul_tprod r (0, x) y,
-  pair_smul := λ r x y, tprod_smul r (0, x) y },
+    ... = r • (0, x) ⊗ₛ y : smul_tprod,
+  pair_smul := λ r x y, tprod_smul },
 let hc3 : γ ⊗ α₁ → (β × γ) ⊗ α₁ :=
   universal_property.factor hc2 in
 have hc4 : _ := universal_property.factor_linear hc2,
@@ -1219,7 +1221,7 @@ have hc6 : ∀ y, ha3 (hc3 y) = prod.inr y := tensor_product.ext (ha4.comp hc4) 
           ha3 (hc3 (x ⊗ₛ y))
         = ha3 ((0, x) ⊗ₛ y) : congr_arg ha3 (hc5 x y)
     ... = (0 ⊗ₛ y, x ⊗ₛ y) : ha5 (0, x) y
-    ... = (0, x ⊗ₛ y) : congr_arg (λ z, (z, x ⊗ₛ y)) (zero_tprod y),
+    ... = (0, x ⊗ₛ y) : congr_arg (λ z, (z, x ⊗ₛ y)) zero_tprod,
 let hd1 : β ⊗ α₁ × γ ⊗ α₁ → (β × γ) ⊗ α₁ :=
   λ z, hb3 z.fst + hc3 z.snd in
 have hd2 : is_linear_map hd1, from
@@ -1235,7 +1237,7 @@ have hd2 : is_linear_map hd1, from
     ... = (hb3 x.fst + hc3 x.snd) + (hb3 y.fst + hc3 y.snd) : eq.symm $ add_assoc _ _ _,
   smul := λ r x, by simp only [hd1, hb3, hc3]; rw [prod.fst_smul, prod.snd_smul, hb4.smul, hc4.smul, smul_add] },
 have h1 : is_linear_map (hd1 ∘ ha3), from hd2.comp ha4,
-have h2 : _ := tensor_product.ext h1 is_linear_map.id (λ x y, by simp [function.comp, *, (add_tprod _ _ _).symm]),
+have h2 : _ := tensor_product.ext h1 is_linear_map.id (λ x y, by simp [function.comp, *, (add_tprod).symm]),
 have h3 : ∀ z, (ha3 ∘ hd1) z = id z, from λ z, calc
         ha3 (hd1 z)
       = ha3 (hb3 z.fst + hc3 z.snd) : rfl
@@ -1253,16 +1255,16 @@ protected def assoc : (β ⊗ γ) ⊗ α₁ ≃ₘ β ⊗ (γ ⊗ α₁) :=
 let ha1 (z : α₁) : β → γ → β ⊗ (γ ⊗ α₁) :=
   λ x y, x ⊗ₛ (y ⊗ₛ z) in
 have ha2 : Π (z : α₁), is_bilinear_map (ha1 z), from λ z,
-{ add_pair  := λ m n k, add_tprod _ _ _,
+{ add_pair  := λ m n k, add_tprod,
   pair_add  := λ m n k, calc
           m ⊗ₛ ((n + k) ⊗ₛ z)
-        = m ⊗ₛ (n ⊗ₛ z + k ⊗ₛ z) : congr_arg (λ b, m ⊗ₛ b) (add_tprod _ _ _)
-    ... = m ⊗ₛ (n ⊗ₛ z) + m ⊗ₛ (k ⊗ₛ z) : tprod_add _ _ _,
-  smul_pair := λ r m n, smul_tprod _ _ _,
+        = m ⊗ₛ (n ⊗ₛ z + k ⊗ₛ z) : congr_arg (λ b, m ⊗ₛ b) (add_tprod)
+    ... = m ⊗ₛ (n ⊗ₛ z) + m ⊗ₛ (k ⊗ₛ z) : tprod_add,
+  smul_pair := λ r m n, smul_tprod,
   pair_smul := λ r m n, calc
           m ⊗ₛ ((r • n) ⊗ₛ z)
-        = m ⊗ₛ (r • n ⊗ₛ z) : congr_arg _ (smul_tprod _ _ _)
-    ... = r • m ⊗ₛ (n ⊗ₛ z) : tprod_smul _ _ _ },
+        = m ⊗ₛ (r • n ⊗ₛ z) : congr_arg _ (smul_tprod)
+    ... = r • m ⊗ₛ (n ⊗ₛ z) : tprod_smul },
 let ha3 (z : α₁) : β ⊗ γ → β ⊗ (γ ⊗ α₁) :=
   universal_property.factor (ha2 z) in
 have ha4 : _ := λ z, universal_property.factor_linear (ha2 z),
@@ -1274,8 +1276,8 @@ have ha7 : is_bilinear_map ha6, from
   pair_add  := λ m n k, (tensor_product.ext (ha4 $ n + k) (is_linear_map.map_add (ha4 n) (ha4 k)) $ λ x y, calc
             ha6 (x ⊗ₛ y) (n + k)
           = x ⊗ₛ (y ⊗ₛ (n + k)) : ha5 (n + k) x y
-      ... = x ⊗ₛ (y ⊗ₛ n + y ⊗ₛ k) : congr_arg ((⊗ₛ) x) (tprod_add _ _ _)
-      ... = x ⊗ₛ (y ⊗ₛ n) + x ⊗ₛ (y ⊗ₛ k) : tprod_add _ _ _
+      ... = x ⊗ₛ (y ⊗ₛ n + y ⊗ₛ k) : congr_arg ((⊗ₛ) x) (tprod_add)
+      ... = x ⊗ₛ (y ⊗ₛ n) + x ⊗ₛ (y ⊗ₛ k) : tprod_add
       ... = x ⊗ₛ (y ⊗ₛ n) + ha3 k (x ⊗ₛ y) : congr_arg (λ b, x ⊗ₛ (y ⊗ₛ n) + b) (ha5 k _ _).symm
       ... = ha6 (x ⊗ₛ y) n + ha6 (x ⊗ₛ y) k : congr_arg (λ b, b + ha3 k (x ⊗ₛ y)) (ha5 n _ _).symm)
     m,
@@ -1283,14 +1285,27 @@ have ha7 : is_bilinear_map ha6, from
   pair_smul := λ r x y, (tensor_product.ext (ha4 $ r • y) (is_linear_map.map_smul_right $ ha4 y) $ λ m n, calc
             ha6 (m ⊗ₛ n) (r • y)
           = m ⊗ₛ (n ⊗ₛ (r • y)) : ha5 (r • y) m n
-      ... = m ⊗ₛ (r • n ⊗ₛ y) : congr_arg _ (tprod_smul r n y)
-      ... = r • m ⊗ₛ (n ⊗ₛ y) : tprod_smul r m _
+      ... = m ⊗ₛ (r • n ⊗ₛ y) : congr_arg _ (tprod_smul)
+      ... = r • m ⊗ₛ (n ⊗ₛ y) : tprod_smul
       ... = r • ha6 (m ⊗ₛ n) y : congr_arg _ (ha5 y m n).symm)
     x },
 let ha8 : β ⊗ γ ⊗ α₁ → β ⊗ (γ ⊗ α₁) :=
   universal_property.factor ha7 in
 have ha9 : _ := universal_property.factor_linear ha7,
 have ha10 : _ := universal_property.factor_commutes ha7,
+let hb1 (x : β) : γ → α₁ → (β ⊗ γ) ⊗ α₁ :=
+  λ y z, (x ⊗ₛ y) ⊗ₛ z in
+have hb2 : Π (x : β), is_bilinear_map (hb1 x), from λ x,
+{ add_pair  := λ m n k, calc
+          (x ⊗ₛ (m + n)) ⊗ₛ k
+        = (x ⊗ₛ m + x ⊗ₛ n) ⊗ₛ k : congr_arg (λ z, z ⊗ₛ k) (tprod_add)
+    ... = (x ⊗ₛ m) ⊗ₛ k + (x ⊗ₛ n) ⊗ₛ k : add_tprod,
+  pair_add  := λ m n k, tprod_add,
+  smul_pair := λ r m n, calc
+          (x ⊗ₛ (r • m)) ⊗ₛ n
+        = (r • x ⊗ₛ m) ⊗ₛ n : congr_arg (λ z, z ⊗ₛ n) (tprod_smul)
+    ... = r • (x ⊗ₛ m) ⊗ₛ n : smul_tprod,
+  pair_smul := λ r m n, tprod_smul },
 sorry
-
+-- β ⊗ (γ ⊗ α₁) → (β ⊗ γ) ⊗ α₁
 end tensor_product
