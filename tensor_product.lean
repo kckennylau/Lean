@@ -1,7 +1,7 @@
 import algebra.group_power algebra.module data.finsupp data.set.basic tactic.ring
 noncomputable theory
 
-universes u u₁ v w
+universes u u₁ v v₁ w
 
 open classical set function
 local attribute [instance] decidable_inhabited prop_decidable
@@ -40,9 +40,9 @@ section bilinear
 variables {α : Type u} [comm_ring α]
 include α
 
-variables {β : Type v} {γ : Type w} {α₁ : Type u₁}
-variables [module α β] [module α γ] [module α α₁]
-
+variables {β : Type v} {γ : Type w} {α₁ : Type u₁} {β₁ : Type v₁}
+variables [module α β] [module α γ] [module α α₁] [module α β₁]
+--TODO: change definition
 structure is_bilinear_map
   {β γ α₁}
   [module α β] [module α γ] [module α α₁]
@@ -62,7 +62,15 @@ theorem is_bilinear_map.pair_smul :
   ∀ r x y, f x (r • y) = r • f x y :=
 λ r x y, by simpa using hf.smul_trans 1 r x y
 
-omit hf
+variables {g : α₁ → β₁} (hg : is_linear_map g)
+include hg
+
+theorem is_bilinear_map.comp : is_bilinear_map (λ x y, g (f x y)) :=
+{ add_pair   := λ x y z, by rw [hf.add_pair, hg.add],
+  pair_add   := λ x y z, by rw [hf.pair_add, hg.add],
+  smul_trans := λ r₁ r₂ x y, by rw [hf.smul_trans, hg.smul] }
+
+omit hf hg
 
 variables (β γ)
 
@@ -71,7 +79,7 @@ structure module_iso (β γ) [module α β] [module α γ] extends equiv β γ :
 
 end bilinear
 
-infix `≃ₘ`:50 := module_iso
+infix ` ≃ₘ `:50 := module_iso
 
 namespace module_iso
 
@@ -423,7 +431,7 @@ end tensor_product
 def tensor_product {α} (β γ) [comm_ring α] [module α β] [module α γ] : Type (max v w) :=
 quotient (tensor_product.setoid α β γ)
 
-local infix `⊗`:100 := tensor_product
+local infix ` ⊗ `:100 := tensor_product
 
 namespace tensor_product
 
@@ -579,10 +587,10 @@ begin
         all_goals { intros, simp [relators.smul_aux], try {refl} } } } }
 end
 
-theorem smul_add (r : α) (f g : β ⊗ γ) : smul α β γ r (add α β γ f g) = add α β γ (smul α β γ r f) (smul α β γ r g) :=
+protected theorem smul_add (r : α) (f g : β ⊗ γ) : smul α β γ r (add α β γ f g) = add α β γ (smul α β γ r f) (smul α β γ r g) :=
 quotient.induction_on₂ f g $ λ m n, quotient.sound $ by rw [finsupp.sum_add_index]; all_goals { intros, simp [relators.smul_aux], try {refl} }
 
-theorem add_smul (r₁ r₂ : α) (f : β ⊗ γ) : smul α β γ (r₁ + r₂) f = add α β γ (smul α β γ r₁ f) (smul α β γ r₂ f) :=
+protected theorem add_smul (r₁ r₂ : α) (f : β ⊗ γ) : smul α β γ (r₁ + r₂) f = add α β γ (smul α β γ r₁ f) (smul α β γ r₂ f) :=
 quotient.induction_on f $ λ m, quotient.sound $
 begin
   unfold relators.smul_aux,
@@ -666,7 +674,7 @@ begin
         from hss' f' hf' } } }
 end
 
-theorem mul_smul (r₁ r₂ : α) (f : β ⊗ γ) : smul α β γ (r₁ * r₂) f = smul α β γ r₁ (smul α β γ r₂ f) :=
+protected theorem mul_smul (r₁ r₂ : α) (f : β ⊗ γ) : smul α β γ (r₁ * r₂) f = smul α β γ r₁ (smul α β γ r₂ f) :=
 quotient.induction_on f $ λ m, quotient.sound $
 begin
   unfold relators.smul_aux,
@@ -723,27 +731,25 @@ begin
       exact relators.zero_mem α β γ } }
 end
 
-theorem one_smul (f : β ⊗ γ) : smul α β γ 1 f = f :=
+protected theorem one_smul (f : β ⊗ γ) : smul α β γ 1 f = f :=
 quotient.induction_on f $ λ m, quotient.sound $ by simp [relators.smul_aux]
 
 instance : module α (β ⊗ γ) :=
 { smul     := smul α β γ,
-  smul_add := smul_add α β γ,
-  add_smul := add_smul α β γ,
-  mul_smul := mul_smul α β γ,
-  one_smul := one_smul α β γ }
+  smul_add := tensor_product.smul_add α β γ,
+  add_smul := tensor_product.add_smul α β γ,
+  mul_smul := tensor_product.mul_smul α β γ,
+  one_smul := tensor_product.one_smul α β γ }
 
 @[simp] lemma add_quot (f g : free_abelian_group β γ) : @has_add.add (β ⊗ γ) _ (⟦f⟧ : β ⊗ γ) ⟦g⟧ = ⟦f + g⟧ := rfl
 @[simp] lemma neg_quot (f : free_abelian_group β γ) : @has_neg.neg (β ⊗ γ) _ (⟦f⟧ : β ⊗ γ) = ⟦-f⟧ := rfl
 
-variables (β γ)
+variables {α} (β γ)
 
 def proj : β → γ → β ⊗ γ :=
 λ x y, ⟦finsupp.single (x, y) 1⟧
 
-variables {α β γ α₁}
-
-def proj.is_bilinear_map : is_bilinear_map (proj α β γ) :=
+def proj.is_bilinear_map : is_bilinear_map (proj β γ) :=
 { add_pair   := λ x y z, quotient.sound $ setoid.symm $
     ⟨[(finsupp.single (x, z) 1 +
          finsupp.single (y, z) 1 -
@@ -770,7 +776,7 @@ def proj.is_bilinear_map : is_bilinear_map (proj α β γ) :=
         rw hz,
         from or.inr (or.inr ⟨r₂, r₁ • x, y, 1, by simp [relators.smul_trans]⟩) },
       simp [list.sum_singleton],
-      { rw ← module.mul_smul,
+      { rw ← mul_smul,
         simp [mul_comm] },
       { rw finsupp.single_zero,
         refl }
@@ -778,6 +784,7 @@ def proj.is_bilinear_map : is_bilinear_map (proj α β γ) :=
 
 namespace universal_property
 
+variables {β γ α₁}
 variables {f : β → γ → α₁} (hf : is_bilinear_map f)
 include hf
 
@@ -916,7 +923,7 @@ begin
     rw finsupp.sum_single_index,
     rw hf.smul_pair,
     rw gsmul_smul,
-    rw module.smul_add,
+    rw smul_add,
     { rw gsmul_zero },
     { rw gsmul_zero },
     { rw finsupp.single_zero, refl },
@@ -933,7 +940,7 @@ theorem factor_linear : is_linear_map (factor hf) :=
 { add  := factor_add hf,
   smul := factor_smul hf }
 
-theorem factor_commutes : ∀ x y, factor hf (proj α β γ x y) = f x y :=
+theorem factor_commutes : ∀ x y, factor hf (proj β γ x y) = f x y :=
 begin
   funext,
   simp [function.comp, proj, factor, factor_aux],
@@ -941,7 +948,7 @@ begin
 end
 
 theorem factor_unique (h : β ⊗ γ → α₁) (H : is_linear_map h)
-  (hh : ∀ x y, h (proj α β γ x y) = f x y) :
+  (hh : ∀ x y, h (proj β γ x y) = f x y) :
   h = factor hf :=
 begin
   apply funext,
@@ -1028,11 +1035,81 @@ end
 end universal_property
 
 instance universal_property {f : β → γ → α₁} (hf : is_bilinear_map f) :
-  type_singleton { h : β ⊗ γ → α₁ // ∃ (H : is_linear_map h), ∀ x y, h (proj α β γ x y) = f x y } :=
+  type_singleton { h : β ⊗ γ → α₁ // ∃ (H : is_linear_map h), ∀ x y, h (proj β γ x y) = f x y } :=
 { default := ⟨universal_property.factor hf,
     universal_property.factor_linear hf,
     universal_property.factor_commutes hf⟩,
   unique  := λ ⟨h, H, hh⟩, subtype.eq $
     universal_property.factor_unique hf h H hh }
+
+variables {β γ α₁}
+protected theorem ext {f g : β ⊗ γ → α₁} (hf : is_linear_map f) (hg : is_linear_map g)
+  (h : ∀ x y, f (proj β γ x y) = g (proj β γ x y)) (z : β ⊗ γ) : f z = g z :=
+have h1 : _ := universal_property.factor_unique
+  (is_bilinear_map.comp (proj.is_bilinear_map β γ) hg)
+  f hf h,
+have h2 : _ := universal_property.factor_unique
+  (is_bilinear_map.comp (proj.is_bilinear_map β γ) hg)
+  g hg (λ x y, rfl),
+(congr_fun h1 z).trans (congr_fun h2 z).symm
+
+variables (β γ)
+
+protected def id : β ⊗ α ≃ₘ β :=
+let hba1 : β → α → β := λ x y, y • x in
+have hba2 : is_bilinear_map hba1,
+by refine {..}; intros; simp [hba1, smul_add, add_smul, smul_smul, mul_comm, mul_left_comm],
+let hba3 : β ⊗ α → β := universal_property.factor hba2 in
+have hba4 : _ := universal_property.factor_linear hba2,
+have hba5 : _ := universal_property.factor_commutes hba2,
+let hb1 : β → β ⊗ α := λ x, proj β α x 1 in
+have hb2 : is_linear_map hb1, from
+{ add  := λ x y, (proj.is_bilinear_map β α).add_pair x y 1,
+  smul := λ r x, by simpa using (proj.is_bilinear_map β α).smul_trans r 1 x 1 },
+have hbb1 : ∀ (x : β) (y : α), hb1 (hba3 (proj β α x y)) = proj β α x y,
+from λ x y, calc
+        hb1 (hba3 (proj β α x y))
+      = proj β α (y • x) 1 : congr_arg hb1 (hba5 _ _)
+  ... = proj β α (y • x) (1 • 1) : by simp
+  ... = (y * 1) • proj β α x 1 : (proj.is_bilinear_map β α).smul_trans y 1 x 1
+  ... = (1 * y) • proj β α x 1 : by simp
+  ... = proj β α (1 • x) (y • 1) : eq.symm $ (proj.is_bilinear_map β α).smul_trans 1 y x 1
+  ... = proj β α x y : by simp,
+{ to_fun    := hba3,
+  inv_fun   := hb1,
+  left_inv  := tensor_product.ext (hb2.comp hba4) is_linear_map.id hbb1,
+  right_inv := λ x, by simp *,
+  linear    := hba4 }
+
+protected def comm : β ⊗ γ ≃ₘ γ ⊗ β :=
+let hbg1 : β → γ → γ ⊗ β := λ x y, proj γ β y x in
+have hbg2 : is_bilinear_map hbg1, from
+{ add_pair   := λ x y z, (proj.is_bilinear_map γ β).pair_add z x y,
+  pair_add   := λ x y z, (proj.is_bilinear_map γ β).add_pair y z x,
+  smul_trans := λ r₁ r₂ x y, by simpa [mul_comm] using (proj.is_bilinear_map γ β).smul_trans r₂ r₁ y x },
+let hbg3 : β ⊗ γ → γ ⊗ β := universal_property.factor hbg2 in
+have hbg4 : _ := universal_property.factor_linear hbg2,
+have hbg5 : _ := universal_property.factor_commutes hbg2,
+let hgb1 : γ → β → β ⊗ γ := λ x y, proj β γ y x in
+have hgb2 : is_bilinear_map hgb1, from
+{ add_pair   := λ x y z, (proj.is_bilinear_map β γ).pair_add z x y,
+  pair_add   := λ x y z, (proj.is_bilinear_map β γ).add_pair y z x,
+  smul_trans := λ r₁ r₂ x y, by simpa [mul_comm] using (proj.is_bilinear_map β γ).smul_trans r₂ r₁ y x },
+let hgb3 : γ ⊗ β → β ⊗ γ := universal_property.factor hgb2 in
+have hgb4 : _ := universal_property.factor_linear hgb2,
+have hgb5 : _ := universal_property.factor_commutes hgb2,
+have hbb1 : ∀ x y, (hgb3 ∘ hbg3) (proj β γ x y) = proj β γ x y,
+from λ x y, by simp [function.comp, *],
+have hbb2 : is_linear_map (hgb3 ∘ hbg3) := hgb4.comp hbg4,
+have hbb3 : _ := tensor_product.ext hbb2 is_linear_map.id hbb1,
+have hgg1 : ∀ x y, (hbg3 ∘ hgb3) (proj γ β x y) = proj γ β x y,
+from λ x y, by simp [function.comp, *],
+have hgg2 : is_linear_map (hbg3 ∘ hgb3) := hbg4.comp hgb4,
+have hgg3 : _ := tensor_product.ext hgg2 is_linear_map.id hgg1,
+{ to_fun    := hbg3,
+  inv_fun   := hgb3,
+  left_inv  := hbb3,
+  right_inv := hgg3,
+  linear    := hbg4 }
 
 end tensor_product
