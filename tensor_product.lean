@@ -1240,12 +1240,6 @@ have h3 : ∀ z, (ha3 ∘ hd1) z = id z, from λ z, calc
   right_inv := h3,
   linear    := ha4 }
 
-
-
-
-
-
-
 protected def assoc : (β ⊗ γ) ⊗ α₁ ≃ₘ β ⊗ (γ ⊗ α₁) :=
 let ha1 (z : α₁) : β → γ → β ⊗ (γ ⊗ α₁) :=
   λ x y, proj _ _ x (proj _ _ y z) in
@@ -1260,6 +1254,34 @@ have ha2 : Π (z : α₁), is_bilinear_map (ha1 z), from λ z,
           proj _ _ m (proj _ _ (r • n) z)
         = proj _ _ m (r • proj _ _ n z) : congr_arg _ ((proj.is_bilinear_map _ _).smul_pair _ _ _)
     ... = r • proj _ _ m (proj _ _ n z) : (proj.is_bilinear_map _ _).pair_smul _ _ _ },
+let ha3 (z : α₁) : β ⊗ γ → β ⊗ (γ ⊗ α₁) :=
+  universal_property.factor (ha2 z) in
+have ha4 : _ := λ z, universal_property.factor_linear (ha2 z),
+have ha5 : _ := λ z, universal_property.factor_commutes (ha2 z),
+let ha6 : β ⊗ γ → α₁ → β ⊗ (γ ⊗ α₁) :=
+  λ r z, ha3 z r in
+have ha7 : is_bilinear_map ha6, from
+{ add_pair  := λ m n k, (ha4 k).add m n,
+  pair_add  := λ m n k, (tensor_product.ext (ha4 $ n + k) (is_linear_map.map_add (ha4 n) (ha4 k)) $ λ x y, calc
+            ha6 (proj β γ x y) (n + k)
+          = proj _ _ x (proj _ _ y (n + k)) : ha5 (n + k) x y
+      ... = proj _ _ x (proj _ _ y n + proj _ _ y k) : congr_arg (proj _ _ x) ((proj.is_bilinear_map _ _).pair_add _ _ _)
+      ... = proj _ _ x (proj _ _ y n) + proj _ _ x (proj _ _ y k) : (proj.is_bilinear_map _ _).pair_add _ _ _
+      ... = proj _ _ x (proj _ _ y n) + ha3 k (proj β γ x y) : congr_arg (λ b, proj _ _ x (proj _ _ y n) + b) (ha5 k _ _).symm
+      ... = ha6 (proj β γ x y) n + ha6 (proj β γ x y) k : congr_arg (λ b, b + ha3 k (proj β γ x y)) (ha5 n _ _).symm)
+    m,
+  smul_pair := λ r x y, (ha4 y).smul r x,
+  pair_smul := λ r x y, (tensor_product.ext (ha4 $ r • y) (is_linear_map.map_smul_right $ ha4 y) $ λ m n, calc
+            ha6 (proj β γ m n) (r • y)
+          = proj _ _ m (proj _ _ n (r • y)) : ha5 (r • y) m n
+      ... = proj _ _ m (r • proj _ _ n y) : congr_arg _ ((proj.is_bilinear_map _ _).pair_smul r n y)
+      ... = r • proj _ _ m (proj _ _ n y) : (proj.is_bilinear_map _ _).pair_smul r m _
+      ... = r • ha6 (proj β γ m n) y : congr_arg _ (ha5 y m n).symm)
+    x },
+let ha8 : β ⊗ γ ⊗ α₁ → β ⊗ (γ ⊗ α₁) :=
+  universal_property.factor ha7 in
+have ha9 : _ := universal_property.factor_linear ha7,
+have ha10 : _ := universal_property.factor_commutes ha7,
 sorry
 
 end tensor_product
