@@ -2,7 +2,7 @@ import algebra.group_power algebra.linear_algebra.prod_module algebra.module
 import data.finsupp data.set.basic tactic.ring
 noncomputable theory
 
-universes u u₁ v v₁ w
+universes u u₁ v v₁ w w₁
 
 open classical set function
 local attribute [instance] decidable_inhabited prop_decidable
@@ -258,10 +258,11 @@ eq.symm $ finset.sum_hom (λ g : α →₀ β, g z) rfl (λ x y, rfl)
 
 end finsupp
 
-variables (α : Type u) [comm_ring α]
-variables (β : Type v) (γ : Type w) (α₁ : Type u₁) [module α β] [module α γ] [module α α₁]
-
 namespace tensor_product
+
+variables (α : Type u) [comm_ring α]
+variables (β : Type v) (γ : Type w) (α₁ : Type u₁) (β₁ : Type v₁) (γ₁ : Type w₁)
+variables [module α β] [module α γ] [module α α₁] [module α β₁] [module α γ₁]
 
 def free_abelian_group : Type (max v w) := β × γ →₀ ℤ
 
@@ -293,26 +294,26 @@ begin
       by_cases hz : f z = 0,
       { simp,
         rw ← finset.sum_subset (finset.empty_subset S),
-        simpa using hz.symm,
-        intros x hx hnx,
-        rw id,
-        rw finsupp.single_apply,
-        have h2 : ¬x.val = z := λ hxz, x.property (by rwa hxz),
-        rw if_neg h2 },
+        { simpa using hz.symm },
+        { intros x hx hnx,
+          rw id,
+          rw finsupp.single_apply,
+          have h2 : ¬x.val = z := λ hxz, x.property (by rwa hxz),
+          rw if_neg h2 } },
       { simp,
         have h1 : finset.singleton (⟨z, hz⟩ : {a : β × γ | f a ≠ 0}) ⊆ S := λ x hx, hs x,
         rw ← finset.sum_subset h1,
-        rw finset.sum_singleton,
-        rw id,
-        rw finsupp.single_apply,
-        rw if_pos rfl,
-        refl,
-        intros x hx hnxz,
-        rw finset.mem_singleton at hnxz,
-        rw id,
-        rw finsupp.single_apply,
-        have h2 : ¬x.val = z := λ hxz, hnxz (subtype.eq hxz),
-        rw if_neg h2 } },
+        { rw finset.sum_singleton,
+          rw id,
+          rw finsupp.single_apply,
+          rw if_pos rfl,
+          refl  },
+        { intros x hx hnxz,
+          rw finset.mem_singleton at hnxz,
+          rw id,
+          rw finsupp.single_apply,
+          have h2 : ¬x.val = z := λ hxz, hnxz (subtype.eq hxz),
+          rw if_neg h2 } } },
     { intros x hx y hy hxy,
       by_contradiction hnxy,
       have hxyx : @@coe_fn (free_abelian_group.has_coe_to_fun β γ) (finsupp.single x.val (f x.val)) x.val
@@ -466,6 +467,10 @@ quotient (tensor_product.setoid α β γ)
 local infix ` ⊗ `:100 := tensor_product
 
 namespace tensor_product
+
+variables (α : Type u) [comm_ring α]
+variables (β : Type v) (γ : Type w) (α₁ : Type u₁) (β₁ : Type v₁) (γ₁ : Type w₁)
+variables [module α β] [module α γ] [module α α₁] [module α β₁] [module α γ₁]
 
 include α
 
@@ -864,7 +869,7 @@ begin
     specialize L_ih (λ x hx, hL x (list.mem_cons_of_mem L_hd hx)),
     specialize L_ih (sub_zero _).symm,
     dsimp at *,
-    rw ← add_neg_eq_zero,
+    rw ← @add_neg_eq_zero _,
     rw ← sub_eq_add_neg at hgL ⊢,
     unfold factor_aux at L_ih ⊢,
     rw ← finsupp.sum_sub_index,
@@ -1243,7 +1248,12 @@ have hd2 : is_linear_map hd1, from
     ... = hb3 x.fst + (hc3 x.snd + (hc3 y.snd + hb3 y.fst)) : congr_arg _ (add_assoc _ _ _)
     ... = hb3 x.fst + (hc3 x.snd + (hb3 y.fst + hc3 y.snd)) : by have := congr_arg (λ z, hb3 x.fst + (hc3 x.snd + z)) (add_comm (hc3 y.snd) (hb3 y.fst)); dsimp at this; exact this
     ... = (hb3 x.fst + hc3 x.snd) + (hb3 y.fst + hc3 y.snd) : eq.symm $ add_assoc _ _ _,
-  smul := λ r x, by simp only [hd1, hb3, hc3]; rw [prod.fst_smul, prod.snd_smul, hb4.smul, hc4.smul, smul_add] },
+  smul := λ r x, calc
+          hb3 (r • x.fst) + hc3 (r • x.snd)
+        = hb3 (r • x.fst) + r • (hc3 x.snd) : congr_arg _ (hc4.smul r x.snd)
+    ... = r • (hb3 x.fst) + r • (hc3 x.snd) : congr_arg (λ z, z + r • (hc3 x.snd)) (hb4.smul r x.fst)
+    ... = r • (hb3 x.fst + hc3 x.snd) : eq.symm $ @smul_add _ _ _ _ r (hb3 x.fst) (hc3 x.snd)
+    ... = r • hd1 x : rfl },
 have h1 : is_linear_map (hd1 ∘ ha3), from hd2.comp ha4,
 have h2 : _ := tensor_product.ext h1 is_linear_map.id (λ x y, by simp [function.comp, *, add_tprod.symm]),
 have h3 : ∀ z, (ha3 ∘ hd1) z = id z, from λ z, calc
@@ -1362,4 +1372,119 @@ have hd2 : _ := tensor_product.ext (ha8.comp hb8) is_linear_map.id $ λ x yz, ca
   right_inv := hd2,
   linear    := ha8 }
 
+variables {α β γ α₁ β₁ γ₁}
+variables {f : β → γ} (hf : is_linear_map f)
+variables {g : β₁ → γ₁} (hg : is_linear_map g)
+include hf hg
+def tprod_map : β ⊗ β₁ → γ ⊗ γ₁ :=
+let h1 : β → β₁ → γ ⊗ γ₁ :=
+  λ x y, f x ⊗ₛ g y in
+have h2 : is_bilinear_map h1 :=
+{ add_pair  := λ m n k, by simp [h1]; rw [hf.add, add_tprod],
+  pair_add  := λ m n k, by simp [h1]; rw [hg.add, tprod_add],
+  smul_pair := λ r m n, by simp [h1]; rw [hf.smul, smul_tprod],
+  pair_smul := λ r m n, by simp [h1]; rw [hg.smul, tprod_smul] },
+universal_property.factor h2
+
 end tensor_product
+
+class is_ring_hom {α : Type u} {β : Type v} [comm_ring α] [comm_ring β] (f : α → β) : Prop :=
+(map_add : ∀ {x y}, f (x + y) = f x + f y)
+(map_mul : ∀ {x y}, f (x * y) = f x * f y)
+(map_one : f 1 = 1)
+
+namespace is_ring_hom
+
+variables {α : Type u} {β : Type v} [comm_ring α] [comm_ring β]
+variables (f : α → β) [is_ring_hom f] {x y : α}
+
+lemma map_zero : f 0 = 0 :=
+calc f 0 = f (0 + 0) - f 0 : by rw [map_add f]; simp
+     ... = 0 : by simp
+
+lemma map_neg : f (-x) = -f x :=
+calc f (-x) = f (-x + x) - f x : by rw [map_add f]; simp
+        ... = -f x : by simp [map_zero f]
+
+lemma map_sub : f (x - y) = f x - f y :=
+by simp [map_add f, map_neg f]
+
+end is_ring_hom
+
+instance is_ring_hom.to_module {α : Type u} {β : Type v} 
+  [comm_ring α] [comm_ring β]
+  (f : α → β) [is_ring_hom f] : module α β :=
+{ smul     := λ r x, f r * x,
+  smul_add := λ r x y, by simp [mul_add],
+  add_smul := λ r₁ r₂ x, by simp [is_ring_hom.map_add f, add_mul],
+  mul_smul := λ r₁ r₂ x, by simp [is_ring_hom.map_mul f, mul_assoc],
+  one_smul := λ x, by simp [is_ring_hom.map_one f] }
+
+section algebra
+
+parameters {α : Type u} {β : Type v} {γ : Type w}
+parameters [comm_ring α] [comm_ring β] [comm_ring γ]
+parameters (f : α → β) [is_ring_hom f]
+parameters (g : α → γ) [is_ring_hom g]
+variables {r r₁ r₂ : α} {x x₁ x₂ : β} {y y₁ y₂ : γ}
+
+def tensor_algebra.mul : @tensor_product α β γ _ (is_ring_hom.to_module f) (is_ring_hom.to_module g) →
+  @tensor_product α β γ _ (is_ring_hom.to_module f) (is_ring_hom.to_module g) →
+  @tensor_product α β γ _ (is_ring_hom.to_module f) (is_ring_hom.to_module g) :=
+let δ := @tensor_product α β γ _ (is_ring_hom.to_module f) (is_ring_hom.to_module g) in
+let h1 : β → γ → β → γ → δ :=
+  λ x₁ y₁ x₂ y₂, (x₁ * x₂) ⊗ₛ (y₁ * y₂) in
+have h2 : Π (x : β) (y : γ), is_bilinear_map (h1 x y), from λ x y,
+{ add_pair  := λ m n k, by simp [h1]; rw [mul_add, tensor_product.add_tprod],
+  pair_add  := λ m n k, by simp [h1]; rw [mul_add, tensor_product.tprod_add],
+  smul_pair := λ r m n, calc
+          (x * (f r * m)) ⊗ₛ (y * n)
+        = (f r * (x * m)) ⊗ₛ (y * n) : by rw [mul_left_comm]
+    ... = r • (x * m) ⊗ₛ (y * n) : tensor_product.smul_tprod,
+  pair_smul := λ r m n, calc
+          (x * m) ⊗ₛ (y * (g r * n))
+        = (x * m) ⊗ₛ (g r * (y * n)) : by rw [mul_left_comm]
+    ... = r • (x * m) ⊗ₛ (y * n) : tensor_product.tprod_smul },
+let h3 (z : β ⊗ γ) : β → γ → δ :=
+  λ x y, tensor_product.universal_property.factor (h2 x y) z in
+have h4 : _ :=
+  λ x y, tensor_product.universal_property.factor_linear (h2 x y),
+have h5 : _ :=
+  λ x y, tensor_product.universal_property.factor_commutes (h2 x y),
+have h6 : ∀ t, is_bilinear_map (h3 t), from λ t,
+{ add_pair  := λ x y z, (tensor_product.ext (h4 (x + y) z)
+      (is_linear_map.map_add (h4 x z) (h4 y z)) $ λ m n, calc
+              h3 (m ⊗ₛ n) (x + y) z
+            = ((x + y) * m) ⊗ₛ (z * n) : h5 (x + y) z m n
+        ... = (x * m) ⊗ₛ (z * n) + (y * m) ⊗ₛ (z * n) : by rw [add_mul, tensor_product.add_tprod]
+        ... = (x * m) ⊗ₛ (z * n) + h3 (m ⊗ₛ n) y z : congr_arg _ (h5 y z m n).symm
+        ... = h3 (m ⊗ₛ n) x z + h3 (m ⊗ₛ n) y z : congr_arg (λ b, b + h3 (m ⊗ₛ n) y z) (h5 x z m n).symm)
+    t,
+  pair_add  := λ x y z, (tensor_product.ext (h4 x (y + z))
+      (is_linear_map.map_add (h4 x y) (h4 x z)) $ λ m n, calc
+              h3 (m ⊗ₛ n) x (y + z)
+            = (x * m) ⊗ₛ ((y + z) * n) : h5 x (y + z) m n
+        ... = (x * m) ⊗ₛ (y * n) + (x * m) ⊗ₛ (z * n) : by rw [add_mul, tensor_product.tprod_add]
+        ... = (x * m) ⊗ₛ (y * n) + h3 (m ⊗ₛ n) x z : congr_arg _ (h5 x z m n).symm
+        ... = h3 (m ⊗ₛ n) x y + h3 (m ⊗ₛ n) x z : congr_arg (λ b, b + h3 (m ⊗ₛ n) x z) (h5 x y m n).symm)
+    t,
+  smul_pair := λ r x y, (tensor_product.ext (h4 (r • x) y)
+      (is_linear_map.map_smul_right (h4 x y)) $ λ m n, calc
+              h3 (m ⊗ₛ n) (f r * x) y
+            = ((f r * x) * m) ⊗ₛ (y * n) : h5 (r • x) y m n
+        ... = (f r * (x * m)) ⊗ₛ (y * n) : congr_arg (λ z, z ⊗ₛ (y * n)) (mul_assoc _ _ _)
+        ... = r • (x * m) ⊗ₛ (y * n) : tensor_product.smul_tprod
+        ... = r • h3 (m ⊗ₛ n) x y : congr_arg _ (h5 x y m n).symm)
+    t,
+  pair_smul := λ r x y, (tensor_product.ext (h4 x (r • y))
+      (is_linear_map.map_smul_right (h4 x y)) $ λ m n, calc
+              h3 (m ⊗ₛ n) x (g r * y)
+            = (x * m) ⊗ₛ ((g r * y) * n) : h5 x (r • y) m n
+        ... = (x * m) ⊗ₛ (g r * (y * n)) : congr_arg _ (mul_assoc _ _ _)
+        ... = r • (x * m) ⊗ₛ (y * n) : tensor_product.tprod_smul
+        ... = r • h3 (m ⊗ₛ n) x y : congr_arg _ (h5 x y m n).symm)
+    t },
+λ x, tensor_product.universal_property.factor (h6 x)
+
+instance tensor_algebra.to_comm_ring : comm_ring (@tensor_product α β γ _ (is_ring_hom.to_module f) (is_ring_hom.to_module g)) :=
+sorry
