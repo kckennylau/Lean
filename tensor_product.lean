@@ -1561,7 +1561,14 @@ instance algebra_tensor.to_comm_ring : comm_ring (β ⊗ γ) :=
 
 instance algebra_tensor.is_ring_hom : is_ring_hom algebra_tensor.hom :=
 { map_add := λ x y, by simp [algebra_tensor.hom, is_ring_hom.map_add f],
-  map_mul := λ x y, sorry,
-  map_one := sorry }
+  map_mul := λ x y, calc
+          algebra_tensor.hom (x * y)
+        = f (x * y) ⊗ₛ 1 : rfl
+    ... = (f x * f y) ⊗ₛ 1 : by rw is_ring_hom.map_mul f
+    ... = (f y * f x) ⊗ₛ (1 * 1) : by simp [mul_comm]
+    ... = h3 (f x ⊗ₛ 1) (f y) 1 : (h5 _ _ _ 1).symm
+    ... = (f x ⊗ₛ 1) * (f y ⊗ₛ 1) : (h8 _ _ _).symm
+    ... = algebra_tensor.hom x * algebra_tensor.hom y : rfl,
+  map_one := by simp [algebra_tensor.hom, is_ring_hom.map_one f]; refl }
 
 end algebra_tensor
