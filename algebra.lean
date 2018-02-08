@@ -78,6 +78,7 @@ theorem is_bilinear_map.comp : is_bilinear_map (λ x y, g (f x y)) :=
 end bilinear
 
 
+
 class algebra (α : out_param $ Type u) [comm_ring α] (β : Type v) extends module α β, has_mul β :=
 (mul_bilinear : is_bilinear_map $ @has_mul.mul β _)
 
@@ -107,13 +108,18 @@ class star_algebra (α : out_param $ Type u) [comm_ring α] (β : Type v) extend
 (mul_inv : ∀ x y : β, (x * y)⁻¹ = y⁻¹ * x⁻¹)
 
 class lie_algebra (α : out_param $ Type u) [comm_ring α] (β : Type v) extends alternative_algebra α β :=
-(jacobi : ∀ x y z : β, x * (y * z) + y * (z * x) + z * (x + y) = 0)
+(jacobi : ∀ x y z : β, x * (y * z) + y * (z * x) + z * (x * y) = 0)
+
+
 
 class unitary_associative_commutative_algebra (α : out_param $ Type u) [comm_ring α] (β : Type v) extends unitary_algebra α β :=
 (mul_assoc : ∀ x y z : β, (x * y) * z = x * (y * z))
 (mul_comm : ∀ x y : β, x * y = y * x)
 
-instance unitary_associative_commutative_algebra.of_is_ring_hom
+instance unitary_associative_commutative_algebra.has_mul (α : out_param $ Type u) [comm_ring α] (β : Type v) [unitary_associative_commutative_algebra α β] : has_mul β :=
+by apply_instance
+
+def unitary_associative_commutative_algebra.of_is_ring_hom
   {α : Type u} [comm_ring α] {β : Type v} [comm_ring β]
   (f : α → β) [is_ring_hom f] : unitary_associative_commutative_algebra α β :=
 { smul := λ x y, f x * y,
@@ -134,14 +140,40 @@ variables {α : Type u} [comm_ring α]
 variables {β : Type v} [unitary_associative_commutative_algebra α β]
 include α
 
-instance to_comm_ring : comm_ring β :=
+def to_comm_ring : comm_ring β :=
 { left_distrib  := (algebra.mul_bilinear β).pair_add,
   right_distrib := (algebra.mul_bilinear β).add_pair,
   ..module.to_add_comm_group β, .._inst_2 }
 
-instance to_is_ring_hom : is_ring_hom (λ x:α, (x • 1:β)) :=
+local attribute [instance] to_comm_ring
+
+def to_is_ring_hom : is_ring_hom (λ x:α, (x • 1:β)) :=
 { map_add := λ x y, add_smul,
   map_mul := λ x y, (congr_arg _ (unitary_algebra.mul_one 1).symm).trans ((algebra.mul_bilinear β).smul_smul x y 1 1).symm,
   map_one := one_smul }
 
 end unitary_associative_commutative_algebra
+
+
+
+section lie_algebra
+
+variables {α : Type u} [comm_ring α]
+variables {β : Type v} [lie_algebra α β] (x y : β)
+
+include α β
+
+def lie_algebra.has_mul : has_mul β := by apply_instance
+
+local attribute [instance] lie_algebra.has_mul
+
+theorem lie_algebra.anti_commutative  : x * y = -(y * x) :=
+have h1 : _ := alternative_algebra.mul_self_zero (x + y),
+sorry
+
+theorem lie_algebra.flexible  : (x * y) * x = x * (y * x) :=
+have h1 : _ := @lie_algebra.jacobi α _inst_1 β _inst_2 x x y,
+have h2 : _ := @lie_algebra.jacobi α _inst_1 β _inst_2 x y y,
+begin end
+
+end lie_algebra
