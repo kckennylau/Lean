@@ -1,4 +1,4 @@
-import algebra.ring algebra.module algebra.linear_algebra data.set.basic tactic.ring data.equiv data.quot
+import algebra.ring algebra.module data.set.basic tactic.ring data.equiv data.quot
 
 -- remove "data.equiv" in PR version
 -- ring.localization
@@ -53,10 +53,10 @@ by simp [map_add f, map_neg f]
 
 end is_ring_hom
 
-theorem is_submodule.eq_univ_of_contains_unit {α : Type u} [comm_ring α] (S : set α) [is_submodule S] :
-(∃ x ∈ S, ∃ y, y * x = (1:α)) → S = set.univ :=
-λ ⟨x, hx, y, hy⟩, set.ext $ λ z, ⟨λ hz, trivial, λ hz, calc
-    z = z * (y * x) : by simp [hy]
+theorem is_submodule.eq_univ_of_contains_unit {α : Type u} [comm_ring α] (S : set α) [is_submodule S]
+(x y : α) (hx : x ∈ S) (h : y * x = 1) : S = set.univ :=
+set.ext $ λ z, ⟨λ hz, trivial, λ hz, calc
+    z = z * (y * x) : by simp [h]
   ... = (z * y) * x : eq.symm $ mul_assoc z y x
   ... ∈ S : is_submodule.smul (z * y) hx⟩
 
@@ -68,8 +68,12 @@ theorem is_submodule.univ_of_one_mem {α : Type u} [comm_ring α] (S : set α) [
 
 -- <move to ring_theory.ideals>
 
-class is_prime_ideal {α : Type u} [comm_ring α] (S : set α) extends is_submodule S : Prop :=
+class is_ideal {α : Type u} [comm_ring α] (S : set α) extends is_submodule S : Prop
+
+class is_proper_ideal {α : Type u} [comm_ring α] (S : set α) extends is_ideal S : Prop :=
 (ne_univ : S ≠ set.univ)
+
+class is_prime_ideal {α : Type u} [comm_ring α] (S : set α) extends is_proper_ideal S : Prop :=
 (mem_or_mem_of_mul_mem : ∀ {x y : α}, x * y ∈ S → x ∈ S ∨ y ∈ S)
 
 theorem mem_or_mem_of_mul_eq_zero {α : Type u} [comm_ring α] (S : set α) [is_prime_ideal S] :
@@ -77,16 +81,14 @@ theorem mem_or_mem_of_mul_eq_zero {α : Type u} [comm_ring α] (S : set α) [is_
 λ x y hxy, have x * y ∈ S, by rw hxy; from (@is_submodule.zero α α _ _ S _ : (0:α) ∈ S),
 is_prime_ideal.mem_or_mem_of_mul_mem this
 
-class is_maximal_ideal {α : Type u} [comm_ring α] (S : set α) extends is_submodule S : Prop :=
+class is_maximal_ideal {α : Type u} [comm_ring α] (S : set α) extends is_proper_ideal S : Prop :=
 mk' ::
-  (ne_univ : S ≠ set.univ)
   (eq_or_univ_of_subset : ∀ (T : set α) [is_submodule T], S ⊆ T → T = S ∨ T = set.univ)
 
 theorem is_maximal_ideal.mk {α : Type u} [comm_ring α] (S : set α) [is_submodule S] :
   (1:α) ∉ S → (∀ x (T : set α) [is_submodule T], S ⊆ T → x ∉ S → x ∈ T → (1:α) ∈ T) → is_maximal_ideal S :=
 λ h₁ h₂,
-{ _inst_2 with
-  ne_univ := λ hu, have (1:α) ∈ S, by rw hu; trivial, h₁ this,
+{ ne_univ := λ hu, have (1:α) ∈ S, by rw hu; trivial, h₁ this,
   eq_or_univ_of_subset := λ T ht hst, or.cases_on (classical.em $ ∃ x, x ∉ S ∧ x ∈ T)
     (λ ⟨x, hxns, hxt⟩, or.inr $ @@is_submodule.univ_of_one_mem _ T ht $ @@h₂ x T ht hst hxns hxt)
     (λ hnts, or.inl $ set.ext $ λ x,
@@ -94,14 +96,14 @@ theorem is_maximal_ideal.mk {α : Type u} [comm_ring α] (S : set α) [is_submod
         λ hxs, hst hxs⟩) }
 
 theorem not_unit_of_mem_maximal_ideal {α : Type u} [comm_ring α] (S : set α) [is_maximal_ideal S] : S ⊆ nonunits α :=
-λ x hx hxy, is_maximal_ideal.ne_univ S $ is_submodule.eq_univ_of_contains_unit S ⟨x, hx, hxy⟩
+λ x hx ⟨y, hxy⟩, is_proper_ideal.ne_univ S $ is_submodule.eq_univ_of_contains_unit S x y hx hxy
 
 class local_ring (α : Type u) [comm_ring α] :=
 (S : set α)
 (max : is_maximal_ideal S)
 (unique : ∀ T [is_maximal_ideal T], S = T)
 
-instance local_of_nonunits_ideal {α : Type u} [comm_ring α] : (0:α) ≠ 1 →  (∀ x y ∈ nonunits α, x + y ∈ nonunits α) → local_ring α :=
+def local_of_nonunits_ideal {α : Type u} [comm_ring α] : (0:α) ≠ 1 → (∀ x y ∈ nonunits α, x + y ∈ nonunits α) → local_ring α :=
 λ hnze h, have hi : is_submodule (nonunits α), from
 { zero_ := λ ⟨y, hy⟩, hnze $ by simpa using hy,
   add_  := h,
@@ -241,7 +243,7 @@ variables (P : set α) [is_prime_ideal P]
 
 instance prime.is_submonoid :
   is_submonoid α (set.compl P) :=
-{ one_mem := λ h, is_prime_ideal.ne_univ P $
+{ one_mem := λ h, is_proper_ideal.ne_univ P $
     is_submodule.univ_of_one_mem P h,
   mul_mem := λ x y hnx hny hxy, or.cases_on
     (is_prime_ideal.mem_or_mem_of_mul_mem hxy) hnx hny }
@@ -287,14 +289,18 @@ local_of_nonunits_ideal
 
 end at_prime
 
-def closure (S : set α) : set α := {y | ∃ (L:list α) (H:∀ x ∈ L, x ∈ S), L.prod = y }
+inductive in_closure (S : set α) : α → Prop
+| basic : ∀a∈S, in_closure a
+| one : in_closure 1
+| mul : ∀x y, in_closure x → in_closure y → in_closure (x * y)
+
+def closure (S : set α) : set α := {x | in_closure S x}
 
 instance closure.is_submonoid (S : set α) : is_submonoid α (closure S) :=
-{ one_mem := ⟨[], by simp⟩,
-  mul_mem := λ x₁ x₂ ⟨L₁, hLS₁, hL₁⟩ ⟨L₂, hLS₂, hL₂⟩,
-    ⟨L₁ ++ L₂,
-     λ x hx, or.cases_on (list.mem_append.1 hx) (hLS₁ x) (hLS₂ x),
-     by simp [list.prod_append, *]⟩ }
+{ one_mem := in_closure.one S, mul_mem := in_closure.mul }
+
+theorem subset_closure {S : set α} : S ⊆ closure S :=
+in_closure.basic
 
 variable α
 
@@ -356,7 +362,7 @@ instance : has_inv (quotient_ring β) :=
      by simpa [mul_comm] using congr_arg (λ x, -x) hrs⟩ }
  end⟩
 
-instance quotient_ring.field.of_integral_domain : field (quotient_ring β) :=
+def quotient_ring.field.of_integral_domain : field (quotient_ring β) :=
 by refine
 { inv := has_inv.inv,
   zero_ne_one := λ hzo, let ⟨t, hts, ht⟩ := quotient.exact hzo in
