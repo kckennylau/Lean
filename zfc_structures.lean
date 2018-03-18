@@ -121,6 +121,9 @@ begin
     split, refl, refl }
 end
 
+theorem opair.iff [has_upair α] {p q r s : α} : opair p q = opair r s ↔ p = r ∧ q = s :=
+⟨opair.ext, λ ⟨hpq, hrs⟩, hpq ▸ hrs ▸ rfl⟩
+
 variable α
 
 class has_sUnion extends has_zmem α :=
@@ -348,7 +351,7 @@ variables {α} [zf α] {x y z : α}
 
 theorem singleton_def : {x} = has_insert.insert x (∅:α) := rfl
 
-theorem mem_singleton_iff : x ∈ ({y}:α) ↔ x = y :=
+theorem zmem_singleton_iff : x ∈ ({y}:α) ↔ x = y :=
 begin
   rw [singleton_def, zmem_insert_iff_eq_or_zmem],
   apply or_iff_left_of_imp,
@@ -357,7 +360,7 @@ begin
   exact not_zmem_empty H
 end
 
-theorem mem_singleton : x ∈ ({x}:α) :=
+theorem zmem_singleton : x ∈ ({x}:α) :=
 begin
   rw [singleton_def, zmem_insert_iff_eq_or_zmem],
   left, refl
@@ -365,20 +368,20 @@ end
 
 theorem not_zmem_self : x ∉ x :=
 λ h, begin
-  rcases regular {x} ⟨x, mem_singleton⟩ with ⟨y, h1, h2⟩,
-  rw mem_singleton_iff at h1,
+  rcases regular {x} ⟨x, zmem_singleton⟩ with ⟨y, h1, h2⟩,
+  rw zmem_singleton_iff at h1,
   subst h1,
-  exact h2 y h mem_singleton
+  exact h2 y h zmem_singleton
 end
 
 theorem not_zmem_and_zmem : x ∈ y → y ∈ x → false :=
 λ hxy hyx, begin
-  rcases regular {x, y} ⟨x, by simp [zmem_insert_iff_eq_or_zmem]; right; exact mem_singleton⟩ with ⟨z, h1, h2⟩,
-  rw [zmem_insert_iff_eq_or_zmem, mem_singleton_iff] at h1,
+  rcases regular {x, y} ⟨x, by simp [zmem_insert_iff_eq_or_zmem]; right; exact zmem_singleton⟩ with ⟨z, h1, h2⟩,
+  rw [zmem_insert_iff_eq_or_zmem, zmem_singleton_iff] at h1,
   cases h1; subst h1,
   { apply h2 _ hxy,
     simp [zmem_insert_iff_eq_or_zmem],
-    right, exact mem_singleton },
+    right, exact zmem_singleton },
   { apply h2 _ hyx,
     simp [zmem_insert_iff_eq_or_zmem] }
 end
@@ -428,7 +431,7 @@ let ⟨x1, y1, hx1, hy1, h⟩ := (zmem_comprehension_iff.1 h).2 in
 (opair.ext h).2.symm ▸ hy1
 
 class is_relation (f : α) : Prop :=
-(eq_opair_of_mem : ∀ z, z ∈ f → ∃ x y, z = opair x y)
+(eq_opair_of_zmem : ∀ z, z ∈ f → ∃ x y, z = opair x y)
 
 def dom (f : α) : α :=
 replacement f (λ z x, ∃ y, z = opair x y)
@@ -438,6 +441,9 @@ replacement f (λ z y, ∃ x, z = opair x y)
 
 class is_function (f : α) extends is_relation f : Prop :=
 (exists_unique : ∀ x, x ∈ dom f → ∃! y, opair x y ∈ f)
+
+class is_injective (f : α) extends is_function f : Prop :=
+(injective : ∀ x y z, opair x z ∈ f → opair y z ∈ f → x = y)
 
 noncomputable def eval (f : α) [is_function f] (x : α) (H : x ∈ dom f) : α :=
 classical.some $ is_function.exists_unique x H
@@ -491,6 +497,95 @@ zmem_range_iff.2 ⟨_, H⟩
 theorem eval_zmem_range {f : α} [is_function f] {x : α} (H : x ∈ dom f) : eval f x H ∈ range f :=
 zmem_range_iff.2 ⟨_, opair_eval_zmem _⟩
 
+def inv (f : α) : α :=
+replacement f (λ x y, ∃ m n, opair m n = x ∧ opair n m = y)
+
+theorem inv.aux (A B C : α)
+  (H1 : ∃ (m n : α), opair m n = A ∧ opair n m = B)
+  (H2 : ∃ (m n : α), opair m n = A ∧ opair n m = C) :
+  B = C :=
+begin
+  rcases H1 with ⟨m1, n1, H3, H4⟩,
+  rcases H2 with ⟨m2, n2, H5, H6⟩,
+  subst H3, subst H4, subst H6,
+  rw opair.iff at H5 ⊢,
+  cases H5 with H1 H2,
+  split; symmetry; assumption
+end
+
+theorem zmem_inv_iff {f x y : α} : opair x y ∈ inv f ↔ opair y x ∈ f :=
+begin
+  rw [inv, zmem_replacement_iff inv.aux],
+  split; intro h,
+  { rcases h with ⟨z, hz, m, n, h1, h2⟩,
+    rcases opair.ext h2 with ⟨h3, h4⟩,
+    subst h1, subst h3, subst h4,
+    exact hz },
+  { exact ⟨_, h, _, _, rfl, rfl⟩ }
+end
+
+instance inv.is_relation (f : α) : is_relation (inv f) :=
+{ eq_opair_of_zmem := begin
+    intros z hz,
+    rw [inv, zmem_replacement_iff inv.aux] at hz,
+    rcases hz with ⟨x, hxf, m, n, h1, h2⟩,
+    subst h2,
+    exact ⟨_, _, rfl⟩
+  end }
+
+instance inv.is_injective (f : α) [is_injective f] : is_injective (inv f) :=
+{ exists_unique := begin
+    intros x hx,
+    rw zmem_dom_iff at hx,
+    cases hx with y hy,
+    existsi y,
+    split,
+    { exact hy },
+    { intros z hz,
+      rw zmem_inv_iff at hy hz,
+      exact is_injective.injective _ _ _ hz hy }
+  end,
+  injective := begin
+    intros x y z hx hy,
+    rw zmem_inv_iff at hx hy,
+    have h1 : z ∈ dom f,
+    { rw zmem_dom_iff,
+      exact ⟨_, hy⟩ },
+    have h2 := is_function.exists_unique z h1,
+    exact unique_of_exists_unique h2 hx hy
+  end,
+  .. inv.is_relation f }
+
+theorem inv.dom {f : α} : dom (inv f) = range f :=
+begin
+  apply is_extensional.ext,
+  intro z,
+  rw [zmem_dom_iff, zmem_range_iff],
+  split; intro hz,
+  { cases hz with y h,
+    rw zmem_inv_iff at h,
+    exact ⟨_, h⟩ },
+  { cases hz with y h,
+    existsi y,
+    rw zmem_inv_iff,
+    exact h }
+end
+
+theorem inv.range {f : α} : range (inv f) = dom f :=
+begin
+  apply is_extensional.ext,
+  intro z,
+  rw [zmem_dom_iff, zmem_range_iff],
+  split; intro hz,
+  { cases hz with y h,
+    rw zmem_inv_iff at h,
+    exact ⟨_, h⟩ },
+  { cases hz with y h,
+    existsi y,
+    rw zmem_inv_iff,
+    exact h }
+end
+
 variable α
 
 def omega : α :=
@@ -539,12 +634,12 @@ def nat.to_omega : nat → α
 | nat.zero     := ∅
 | (nat.succ n) := succ (n.to_omega)
 
-theorem nat.to_omega.mem_omega : ∀ n, nat.to_omega α n ∈ omega α
+theorem nat.to_omega.zmem_omega : ∀ n, nat.to_omega α n ∈ omega α
 | nat.zero     := empty_zmem_omega
-| (nat.succ n) := succ_zmem_omega_of_zmem $ nat.to_omega.mem_omega n
+| (nat.succ n) := succ_zmem_omega_of_zmem $ nat.to_omega.zmem_omega n
 
 def nat.to_omega' : nat → {x // x ∈ omega α} :=
-λ n, ⟨nat.to_omega α n, nat.to_omega.mem_omega α n⟩
+λ n, ⟨nat.to_omega α n, nat.to_omega.zmem_omega α n⟩
 
 theorem nat.to_omega.injective : function.injective (nat.to_omega α) :=
 begin
@@ -643,10 +738,10 @@ begin
       rcases hx' with ⟨y, hy⟩,
       dsimp [h] at hy ⊢,
       split,
-      { exact zmem_prod (zmem_left_of_zmem_prod hy) mem_singleton },
+      { exact zmem_prod (zmem_left_of_zmem_prod hy) zmem_singleton },
       { intros y' hy',
         replace hy' := zmem_right_of_zmem_prod hy',
-        rwa mem_singleton_iff at hy' } } },
+        rwa zmem_singleton_iff at hy' } } },
   have H5 : dom h = ω,
   { apply is_extensional.ext,
     intro z,
@@ -655,17 +750,17 @@ begin
     { cases h5 with y hy,
       exact zmem_left_of_zmem_prod hy },
     { existsi c,
-      exact zmem_prod h5 mem_singleton } },
+      exact zmem_prod h5 zmem_singleton } },
   have H6 : range h ⊆ A,
   { intros z hz,
     rw [zmem_range_iff] at hz,
     cases hz with y hy,
     replace hy := zmem_right_of_zmem_prod hy,
-    rw mem_singleton_iff at hy,
+    rw zmem_singleton_iff at hy,
     subst hy,
     exact H3 },
   have H7 : opair ∅ c ∈ h,
-  { exact zmem_prod empty_zmem_omega mem_singleton },
+  { exact zmem_prod empty_zmem_omega zmem_singleton },
   rw [recursion, zmem_comprehension_iff],
   split,
   { exact zmem_prod empty_zmem_omega H3 },
@@ -688,7 +783,7 @@ begin
   { rw H1, exact h1 },
   let h' : α := comprehension (prod ω A) (λ w, ∀ m n, w = opair m n → ((m = succ x ∧ n = z) ∨ (m ≠ succ x ∧ w ∈ h))),
   have hf' : is_function h' :=
-  { eq_opair_of_mem := λ z hz, begin
+  { eq_opair_of_zmem := λ z hz, begin
         dsimp [h'] at hz,
         rw [zmem_comprehension_iff] at hz,
         cases hz with hz1 hz2,
@@ -956,7 +1051,7 @@ begin
 end
 
 instance recursion.is_function : is_function (recursion f A c) :=
-{ eq_opair_of_mem := λ z hz, let ⟨x, y, _, _, h⟩ := (zmem_comprehension_iff.1 (zmem_comprehension_iff.1 hz).1).2 in ⟨x, y, h⟩,
+{ eq_opair_of_zmem := λ z hz, let ⟨x, y, _, _, h⟩ := (zmem_comprehension_iff.1 (zmem_comprehension_iff.1 hz).1).2 in ⟨x, y, h⟩,
   exists_unique := λ x hx, begin
     rw [zmem_dom_iff] at hx,
     cases hx with w hw,
@@ -1010,17 +1105,17 @@ theorem transitive_closure.aux.empty : ∃ (A : α) (H1 : (∅:α) ∈ (ω:α)) 
 begin
   have H2 : ∀ (p q r : α), opair p q ∈ {opair ∅ z} → opair p r ∈ {opair ∅ z} → q = r,
   { intros p q r hpq hpr,
-    rw mem_singleton_iff at hpq hpr,
+    rw zmem_singleton_iff at hpq hpr,
     have h1 := (opair.ext hpq).2,
     have h2 := (opair.ext hpr).2,
     subst h1, subst h2 },
   have H3 : ∀ (p q : α), opair p q ∈ {opair ∅ z} → p ∈ succ (∅:α),
   { intros p q h,
-    rw mem_singleton_iff at h,
+    rw zmem_singleton_iff at h,
     rw (opair.ext h).1,
     exact zmem_succ },
   exact ⟨{opair ∅ z}, empty_zmem_omega, H2, H3, (λ p hp, false.elim $ not_zmem_empty hp),
-    mem_singleton, (λ p q hp, false.elim $ not_zmem_empty hp), mem_singleton⟩
+    zmem_singleton, (λ p q hp, false.elim $ not_zmem_empty hp), zmem_singleton⟩
 end
 
 theorem transitive_closure.aux.succ {k : α} (hk : k ∈ (ω:α)) :
@@ -1254,7 +1349,324 @@ end
 
 end transitive_closure
 
-#check transitive_closure.UMP
+def prod_assoc (x y z : α) : α :=
+comprehension (prod (prod (prod x y) z) (prod x (prod y z)))
+(λ m, ∃ p q r, m = opair (opair (opair p q) r) (opair p (opair q r)))
+
+theorem prod_assoc.dom {x y z : α} : dom (prod_assoc x y z) = prod (prod x y) z :=
+begin
+  apply is_extensional.ext,
+  intro m,
+  rw zmem_dom_iff,
+  split; intro h,
+  { cases h with n h,
+    rw [prod_assoc, zmem_comprehension_iff] at h,
+    rcases h with ⟨h1, p, q, r, h2⟩,
+    exact zmem_left_of_zmem_prod h1 },
+  { rw [prod, zmem_comprehension_iff] at h,
+    rcases h with ⟨_, pq, r, hpq, hr, h⟩,
+    subst h,
+    rw zmem_comprehension_iff at hpq,
+    rcases hpq with ⟨_, p, q, hp, hq, hpq⟩,
+    subst hpq,
+    existsi opair p (opair q r),
+    rw [prod_assoc, zmem_comprehension_iff],
+    refine ⟨zmem_prod
+        (zmem_prod (zmem_prod hp hq) hr)
+        (zmem_prod hp (zmem_prod hq hr)),
+      _, _, _, rfl⟩ }
+end
+
+theorem prod_assoc.range {x y z : α} : range (prod_assoc x y z) = prod x (prod y z) :=
+begin
+  apply is_extensional.ext,
+  intro m,
+  rw zmem_range_iff,
+  split; intro h,
+  { cases h with n h,
+    rw [prod_assoc, zmem_comprehension_iff] at h,
+    rcases h with ⟨h1, p, q, r, h2⟩,
+    exact zmem_right_of_zmem_prod h1 },
+  { rw [prod, zmem_comprehension_iff] at h,
+    rcases h with ⟨_, p, qr, hp, hqr, h⟩,
+    subst h,
+    rw zmem_comprehension_iff at hqr,
+    rcases hqr with ⟨_, q, r, hq, hr, hqr⟩,
+    subst hqr,
+    existsi opair (opair p q) r,
+    rw [prod_assoc, zmem_comprehension_iff],
+    refine ⟨zmem_prod
+        (zmem_prod (zmem_prod hp hq) hr)
+        (zmem_prod hp (zmem_prod hq hr)),
+      _, _, _, rfl⟩ }
+end
+
+instance prod_assoc.is_injective {x y z : α} : is_injective (prod_assoc x y z) :=
+{ eq_opair_of_zmem := begin
+    intros m h,
+    rw [prod_assoc, zmem_comprehension_iff] at h,
+    rcases h with ⟨h1, p, q, r, h2⟩,
+    exact ⟨_, _, h2⟩
+  end,
+  exists_unique := begin
+    intros m h,
+    rw zmem_dom_iff at h,
+    cases h with n hn,
+    existsi n, split, exact hn,
+    intros n' hn',
+    rw [prod_assoc, zmem_comprehension_iff] at hn,
+    rcases hn with ⟨h1, p, q, r, h2⟩,
+    rw [prod_assoc, zmem_comprehension_iff] at hn',
+    rcases hn' with ⟨h1', p', q', r', h2'⟩,
+    rw opair.iff at h2 h2',
+    cases h2 with h2 h3,
+    cases h2' with h2' h3',
+    subst h2, subst h3, subst h3',
+    rw [opair.iff, opair.iff] at h2',
+    cases h2' with hpq hr,
+    cases hpq with hp hq,
+    subst hp, subst hq, subst hr
+  end,
+  injective := begin
+    intros m m' n hm hm',
+    rw [prod_assoc, zmem_comprehension_iff] at hm,
+    rcases hm with ⟨h1, p, q, r, h2⟩,
+    rw [prod_assoc, zmem_comprehension_iff] at hm',
+    rcases hm' with ⟨h1', p', q', r', h2'⟩,
+    rw opair.iff at h2 h2',
+    cases h2 with h2 h3,
+    cases h2' with h2' h3',
+    subst h2, subst h2', subst h3,
+    rw [opair.iff, opair.iff] at h3',
+    rcases h3' with ⟨hp, hq, hr⟩,
+    subst hp, subst hq, subst hr
+  end }
+
+def hom (x y : α) : α :=
+comprehension (powerset $ prod x y) (λ f, is_function f ∧ dom f = x)
+
+theorem zmem_hom_iff {f : α} : f ∈ hom x y ↔ is_function f ∧ dom f = x ∧ range f ⊆ y :=
+begin
+  rw [hom, zmem_comprehension_iff, zmem_powerset],
+  split; intro hf; rcases hf with ⟨hf1, hf2, hf3⟩,
+  { refine ⟨hf2, hf3, _⟩,
+    intros z hz,
+    rw zmem_range_iff at hz,
+    cases hz with w hwz,
+    exact zmem_right_of_zmem_prod (hf1 _ hwz) },
+  { refine ⟨_, hf1, hf2⟩,
+    intros z hz,
+    have hf4 := hf1.eq_opair_of_zmem,
+    specialize hf4 _ hz,
+    rcases hf4 with ⟨m, n, hf4⟩,
+    subst hf4,
+    have hf4 : m ∈ dom f,
+    { rw zmem_dom_iff, exact ⟨_, hz⟩ },
+    have hf5 : n ∈ range f,
+    { rw zmem_range_iff, exact ⟨_, hz⟩ },
+    rw hf2 at hf4,
+    replace hf5 := hf3 _ hf5,
+    exact zmem_prod hf4 hf5 }
+end
+
+def prod_adjoint_hom (x y z : α) : α :=
+comprehension (prod (hom (prod x y) z) (hom x (hom y z)))
+(λ m, ∃ (f g : α) (H : m = opair f g),
+   ∀ p h, opair p h ∈ g → ∀ q r, opair (opair p q) r ∈ f → opair q r ∈ h)
+
+theorem prod_adjoint_hom.dom {x y z : α} : dom (prod_adjoint_hom x y z) = hom (prod x y) z :=
+begin
+  apply is_extensional.ext,
+  intro m,
+  rw zmem_dom_iff,
+  split; intro h,
+  { cases h with n h,
+    rw [prod_adjoint_hom, zmem_comprehension_iff] at h,
+    rcases h with ⟨h1, p, q, r, h2⟩,
+    exact zmem_left_of_zmem_prod h1 },
+  { have h := h,
+    rw zmem_hom_iff at h,
+    rcases h with ⟨h1, h2, h3⟩,
+    let m' : α := comprehension (prod x (hom y z))
+      (λ n, ∀ p g, n = opair p g → ∀ q r, opair q r ∈ g → opair (opair p q) r ∈ m),
+    have h1' : is_function m',
+    { split,
+      { intros z hz,
+        rw [zmem_comprehension_iff, prod, zmem_comprehension_iff] at hz,
+        rcases hz.1.2 with ⟨_, _, _, _, hz1⟩,
+        exact ⟨_, _, hz1⟩ },
+      { intros x' hx',
+        rw [zmem_dom_iff] at hx',
+        cases hx' with y' hy',
+        existsi y',
+        split,
+        { exact hy' },
+        { intros y'' hy'',
+          rw [zmem_comprehension_iff, prod, zmem_comprehension_iff] at hy',
+          rcases hy' with ⟨hy1', hy2'⟩,
+          rcases hy1' with ⟨_, p', q', hp', hq', h'⟩,
+          rcases opair.ext h' with ⟨h1', h2'⟩,
+          subst h1', subst h2', clear h',
+          rw zmem_hom_iff at hq',
+          rcases hq' with ⟨hy1', hy3', hy4'⟩,
+          cases hy1' with hy5' hy6',
+          specialize hy2' _ _ rfl,
+          rw [zmem_comprehension_iff, prod, zmem_comprehension_iff] at hy'',
+          rcases hy'' with ⟨hy1'', hy2''⟩,
+          rcases hy1'' with ⟨_, p'', q'', hp'', hq'', h''⟩,
+          rcases opair.ext h'' with ⟨h1'', h2''⟩,
+          subst h1'', subst h2'', clear h'',
+          rw zmem_hom_iff at hq'',
+          rcases hq'' with ⟨hy1'', hy3'', hy4''⟩,
+          cases hy1'' with hy5'' hy6'',
+          specialize hy2'' _ _ rfl,
+          apply is_extensional.ext,
+          intro z',
+          cases h1 with h4 h5,
+          split; intro hz',
+          { specialize hy5'' _ hz',
+            rcases hy5'' with ⟨q'', r'', h⟩, subst h,
+            specialize hy2'' _ _ hz',
+            have hz1' : q'' ∈ dom y'',
+            { rw zmem_dom_iff, exact ⟨_, hz'⟩ },
+            rw [hy3'', ← hy3'] at hz1',
+            specialize hy6' _ hz1',
+            rcases hy6' with ⟨r', hy6', _⟩,
+            specialize hy2' _ _ hy6',
+            have hz2' : opair x' q'' ∈ dom m,
+            { rw zmem_dom_iff, exact ⟨_, hy2'⟩ },
+            specialize h5 _ hz2',
+            replace h5 := unique_of_exists_unique h5 hy2'' hy2',
+            subst h5, exact hy6' },
+          { specialize hy5' _ hz',
+            rcases hy5' with ⟨q', r', h⟩, subst h,
+            specialize hy2' _ _ hz',
+            have hz1' : q' ∈ dom y',
+            { rw zmem_dom_iff, exact ⟨_, hz'⟩ },
+            rw [hy3', ← hy3''] at hz1',
+            specialize hy6'' _ hz1',
+            rcases hy6'' with ⟨r'', hy6'', _⟩,
+            specialize hy2'' _ _ hy6'',
+            have hz2' : opair x' q' ∈ dom m,
+            { rw zmem_dom_iff, exact ⟨_, hy2'⟩ },
+            specialize h5 _ hz2',
+            replace h5 := unique_of_exists_unique h5 hy2'' hy2',
+            subst h5, exact hy6'' } } } },
+    have h2' : dom m' = x,
+    { apply is_extensional.ext,
+      intro p, rw [zmem_dom_iff],
+      split; intro hp,
+      { cases hp with g hg,
+        rw [zmem_comprehension_iff] at hg,
+        exact zmem_left_of_zmem_prod hg.1 },
+      { let g : α := comprehension (prod y z)
+          (λ n, ∀ q r, n = opair q r → opair (opair p q) r ∈ m),
+        cases h1 with h4 h5,
+        have hg1 : is_function g,
+        { split,
+          { intros z hz,
+            rw [zmem_comprehension_iff, prod, zmem_comprehension_iff] at hz,
+            rcases hz.1.2 with ⟨_, _, _, _, hz1⟩,
+            exact ⟨_, _, hz1⟩ },
+          { intros q hq,
+            rw zmem_dom_iff at hq,
+            cases hq with r hr,
+            existsi r,
+            split,
+            { exact hr },
+            { intros r' hr',
+              rw [zmem_comprehension_iff] at hr hr',
+              rw h2 at h5,
+              specialize h5 _ (zmem_prod hp $ zmem_left_of_zmem_prod hr.1),
+              exact unique_of_exists_unique h5 (hr'.2 _ _ rfl) (hr.2 _ _ rfl) } } },
+        have hg2 : dom g = y,
+        { apply is_extensional.ext,
+          intro q,
+          rw zmem_dom_iff,
+          split; intro hq,
+          { cases hq with r hr,
+            rw [zmem_comprehension_iff] at hr,
+            exact zmem_left_of_zmem_prod hr.1 },
+          { have h6 : opair p q ∈ dom m,
+            { rw h2, exact zmem_prod hp hq },
+            specialize h5 _ h6,
+            rcases h5 with ⟨r, hr1, hr2⟩,
+            have hr : r ∈ z,
+            { apply h3,
+              rw zmem_range_iff,
+              exact ⟨_, hr1⟩ },
+            existsi r,
+            rw zmem_comprehension_iff,
+            split,
+            { exact zmem_prod hq hr },
+            { intros _ _ hqr,
+              cases opair.ext hqr with hqr1 hqr2,
+              subst hqr1, subst hqr2, clear hqr,
+              exact hr1 } } },
+        have hg3 : range g ⊆ z,
+        { intros r hr,
+          rw zmem_range_iff at hr,
+          cases hr with q hq,
+          rw zmem_comprehension_iff at hq,
+          exact zmem_right_of_zmem_prod hq.1 },
+        existsi g,
+        rw zmem_comprehension_iff,
+        split,
+        { apply zmem_prod hp,
+          rw zmem_hom_iff,
+          exact ⟨hg1, hg2, hg3⟩ },
+        { intros _ _ hpg,
+          cases opair.ext hpg with hpg1 hpg2,
+          subst hpg1, subst hpg2, clear hpg,
+          intros q r hqr,
+          rw zmem_comprehension_iff at hqr,
+          exact hqr.2 _ _ rfl } } },
+    have h3' : range m' ⊆ hom y z,
+    { intros g hg,
+      rw zmem_range_iff at hg,
+      cases hg with p hg,
+      rw zmem_comprehension_iff at hg,
+      exact zmem_right_of_zmem_prod hg.1 },
+    existsi m',
+    rw [prod_adjoint_hom, zmem_comprehension_iff],
+    split,
+    { apply zmem_prod h,
+      rw zmem_hom_iff,
+      exact ⟨h1', h2', h3'⟩ },
+    { refine ⟨_, _, rfl, _⟩,
+      intros p g hp q r hpqr,
+      rw zmem_comprehension_iff at hp,
+      have hg := zmem_right_of_zmem_prod hp.1,
+      rw zmem_hom_iff at hg,
+      rcases hg with ⟨hg1, hg2, hg3⟩,
+      cases hg1 with hg4 hg5,
+      rw hg2 at hg5,
+      have hpq : opair p q ∈ prod x y,
+      { rw [← h2, zmem_dom_iff],
+        exact ⟨_, hpqr⟩ },
+      specialize hg5 _ (zmem_right_of_zmem_prod hpq),
+      rcases hg5 with ⟨r', hr1', hr2'⟩,
+      have hpqr' := hp.2 _ _ rfl _ _ hr1',
+      cases h1 with h4 h5,
+      rw h2 at h5,
+      replace h5 := unique_of_exists_unique (h5 _ hpq) hpqr' hpqr,
+      subst h5,
+      exact hr1' } }
+end
+
+theorem prod_adjoint_hom.range {x y z : α} : range (prod_adjoint_hom x y z) = hom x (hom y z) := sorry
+
+instance prod_adjoint_hom.is_injective {x y z : α} : is_injective (prod_adjoint_hom x y z) := sorry
+
+-- maximum usability
+theorem prod_adjoint_hom.prop {x y z f g p q : α}
+  [is_function f] [is_function g]
+  (H1 : f ∈ dom (prod_adjoint_hom x y z))
+  (H2 : eval (prod_adjoint_hom x y z) f H1 = g)
+  (H3 : opair p q ∈ dom f)
+  (H4 : p ∈ dom g) (H5 : q ∈ dom (eval g p H4))
+  [is_function (eval g p H4)] :
+  eval f (opair p q) H3 = eval (eval g p H4) q H5 := sorry
 
 end zf
 
