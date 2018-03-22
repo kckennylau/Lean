@@ -445,15 +445,6 @@ class is_function (f : α) extends is_relation f : Prop :=
 class is_injective (f : α) extends is_function f : Prop :=
 (injective : ∀ x y z, opair x z ∈ f → opair y z ∈ f → x = y)
 
-noncomputable def eval (f : α) [is_function f] (x : α) (H : x ∈ dom f) : α :=
-classical.some $ is_function.exists_unique x H
-
-theorem opair_eval_zmem {f : α} [is_function f] {x : α} (H : x ∈ dom f) : opair x (eval f x H) ∈ f :=
-(classical.some_spec $ is_function.exists_unique x H).1
-
-theorem eval_unique (f : α) [is_function f] (x y : α) (H : x ∈ dom f) (Hxy : opair x y ∈ f) : y = eval f x H :=
-(classical.some_spec $ is_function.exists_unique x H).2 y Hxy
-
 theorem zmem_dom_iff {f x : α} : x ∈ dom f ↔ ∃ y, opair x y ∈ f :=
 begin
   have h1 : ∀ (A B C : α), (∃ (y : α), A = opair B y) → (∃ (y : α), A = opair C y) → B = C,
@@ -494,8 +485,37 @@ zmem_dom_iff.2 ⟨_, H⟩
 theorem zmem_range_of_opair_zmem {f : α} [is_function f] {x y : α} (H : opair x y ∈ f) : y ∈ range f :=
 zmem_range_iff.2 ⟨_, H⟩
 
-theorem eval_zmem_range {f : α} [is_function f] {x : α} (H : x ∈ dom f) : eval f x H ∈ range f :=
-zmem_range_iff.2 ⟨_, opair_eval_zmem _⟩
+def eval (f : α) [is_function f] (x : α) : α :=
+sUnion $ comprehension (range f) (λ y, opair x y ∈ f)
+
+theorem eval_unique {f : α} [is_function f] {x y : α} (H : x ∈ dom f) (Hxy : opair x y ∈ f) : y = eval f x :=
+begin
+  rcases is_function.exists_unique _ H with ⟨y', H1, H2⟩,
+  have H3 := H2 _ Hxy, subst H3,
+  apply is_extensional.ext,
+  intro z, split; intro hz,
+  { rw [eval, zmem_sUnion_iff_zmem_zmem],
+    existsi y,
+    rw [zmem_comprehension_iff, zmem_range_iff],
+    exact ⟨hz, ⟨x, Hxy⟩, Hxy⟩ },
+  { rw [eval, zmem_sUnion_iff_zmem_zmem] at hz,
+    rcases hz with ⟨t, ht1, ht2⟩,
+    rw [zmem_comprehension_iff, zmem_range_iff] at ht2,
+    specialize H2 _ ht2.2,
+    subst H2,
+    exact ht1 }
+end
+
+theorem opair_eval_zmem {f : α} [is_function f] {x : α} (H : x ∈ dom f) : opair x (eval f x) ∈ f :=
+begin
+  rcases is_function.exists_unique _ H with ⟨y, H1, H2⟩,
+  have H3 := eval_unique H H1,
+  subst H3,
+  exact H1
+end
+
+theorem eval_zmem_range {f : α} [is_function f] {x : α} (H : x ∈ dom f) : eval f x ∈ range f :=
+zmem_range_iff.2 ⟨_, opair_eval_zmem H⟩
 
 def inv (f : α) : α :=
 replacement f (λ x y, ∃ m n, opair m n = x ∧ opair n m = y)
@@ -1004,11 +1024,11 @@ begin
     have h4 : opair k y ∈ dom f,
     { rw [recursion, zmem_comprehension_iff] at h1,
       rw H1, exact h1.1 },
-    existsi (eval f (opair k y) h4),
+    existsi (eval f (opair k y)),
     split,
     { exact recursion.succ f A c H1 H2 H3 h1 (opair_eval_zmem h4) },
     { intros z hz,
-      apply eval_unique f _ z h4,
+      apply eval_unique h4,
       rw [recursion, zmem_comprehension_iff] at hz,
       rcases hz with ⟨hz1, h'', x'', y'', hf'', H4'', H5'', H6'', H7'', H8'', H9''⟩,
       cases opair.ext H4'' with H41'' H42'',
@@ -1028,26 +1048,26 @@ begin
         specialize hf3 (succ ∅) (H5''.symm ▸ succ_zmem_omega_of_zmem empty_zmem_omega),
         have hf2 := unique_of_exists_unique hf3 H8'' H9'',
         subst hf2,
-        apply opair_eval_zmem },
+        apply opair_eval_zmem h4 },
       { rcases h3 with ⟨k, H, hk⟩, subst hk,
         have h5 : succ k ∈ dom h'',
         { rw H5'', exact hk },
-        have h6 : opair (succ k) (@@eval _ h'' hf'' (succ k) h5) ∈ recursion f A c,
+        have h6 : opair (succ k) (@@eval _ h'' hf'' (succ k)) ∈ recursion f A c,
         { rw [recursion, zmem_comprehension_iff],
           split,
-          { exact zmem_prod hk (H6'' _ $ @eval_zmem_range _ _ _ hf'' _ _) },
+          { exact zmem_prod hk (H6'' _ $ @eval_zmem_range _ _ _ hf'' _ h5) },
           { exact ⟨h'', _, _, hf'', rfl, H5'', H6'', H7'',
               (λ m hm hsm hm1 hm2 hm3, H8'' m hm hsm (zmem_succ_of_zmem hm1) hm2 hm3),
-              @opair_eval_zmem _ _ _ hf'' _ _⟩ } },
+              @opair_eval_zmem _ _ _ hf'' _ h5⟩ } },
         specialize H8'' _ _ _ zmem_succ (@opair_eval_zmem _ _ _ hf'' _ h5)
-          (opair_eval_zmem (H1.symm ▸ zmem_prod hk (H6'' _ $ @eval_zmem_range _ _ _ hf'' _ _))),
+          (opair_eval_zmem (H1.symm ▸ zmem_prod hk (H6'' _ $ @eval_zmem_range _ _ _ hf'' _ h5))),
         specialize h2 _ h6,
         subst h2,
         have hf3 := hf''.exists_unique,
         specialize hf3 (succ (succ k)) (H5''.symm ▸ succ_zmem_omega_of_zmem hk),
         have hf2 := unique_of_exists_unique hf3 H8'' H9'',
         subst hf2,
-        apply opair_eval_zmem } } }
+        apply opair_eval_zmem h4 } } }
 end
 
 instance recursion.is_function : is_function (recursion f A c) :=
@@ -1662,11 +1682,11 @@ instance prod_adjoint_hom.is_injective {x y z : α} : is_injective (prod_adjoint
 theorem prod_adjoint_hom.prop {x y z f g p q : α}
   [is_function f] [is_function g]
   (H1 : f ∈ dom (prod_adjoint_hom x y z))
-  (H2 : eval (prod_adjoint_hom x y z) f H1 = g)
+  (H2 : eval (prod_adjoint_hom x y z) f = g)
   (H3 : opair p q ∈ dom f)
-  (H4 : p ∈ dom g) (H5 : q ∈ dom (eval g p H4))
-  [is_function (eval g p H4)] :
-  eval f (opair p q) H3 = eval (eval g p H4) q H5 := sorry
+  (H4 : p ∈ dom g) (H5 : q ∈ dom (eval g p))
+  [is_function (eval g p)] :
+  eval f (opair p q) = eval (eval g p) q := sorry
 
 end zf
 
