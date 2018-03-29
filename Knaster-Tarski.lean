@@ -76,9 +76,8 @@ le_inf
 theorem aux3 (A : set α) (HA : A ⊆ fixed_points f) : Sup A ≤ f (Sup A) :=
 Sup_le $ λ x hxA, (HA hxA) ▸ (is_ord_hom.apply_le_apply_of_le $ le_Sup hxA)
 
-theorem aux4 (A : set $ fixed_points f) : f (Inf (subtype.val '' A)) ≤ Inf (subtype.val '' A) :=
-le_Inf $ λ z ⟨⟨x, hx⟩, hxA, hxz⟩, hxz ▸ show f (Inf (subtype.val '' A)) ≤ x,
-from hx ▸ (is_ord_hom.apply_le_apply_of_le $ Inf_le ⟨⟨x, hx⟩, hxA, rfl⟩)
+theorem aux4 (A : set α) (HA : A ⊆ fixed_points f) : f (Inf A) ≤ Inf A :=
+le_Inf $ λ x hxA, (HA hxA) ▸ (is_ord_hom.apply_le_apply_of_le $ Inf_le hxA)
 
 instance : complete_lattice (fixed_points f) :=
 { le           := subrel (≤) _,
@@ -89,12 +88,12 @@ instance : complete_lattice (fixed_points f) :=
   sup          := λ x y, ⟨next f (x.1 ⊔ y.1), next.fixed (aux1 f x y)⟩,
   le_sup_left  := λ x y, show x.1 ≤ _, from le_trans le_sup_left next.le,
   le_sup_right := λ x y, show y.1 ≤ _, from le_trans le_sup_right next.le,
-  sup_le       := λ x y z hxz hyz, Inf_le ⟨sup_le hxz hyz, z.2.symm ▸ le_refl _⟩,
+  sup_le       := λ x y z hxz hyz, Inf_le ⟨sup_le hxz hyz, z.2.symm ▸ le_refl z.1⟩,
 
   inf          := λ x y, ⟨previous f (x.1 ⊓ y.1), previous.fixed (aux2 f x y)⟩,
   inf_le_left  := λ x y, show _ ≤ x.1, from le_trans previous.le inf_le_left,
   inf_le_right := λ x y, show _ ≤ y.1, from le_trans previous.le inf_le_right,
-  le_inf       := λ x y z hxy hxz, le_Sup ⟨le_inf hxy hxz, x.2.symm ▸ le_refl _⟩,
+  le_inf       := λ x y z hxy hxz, le_Sup ⟨le_inf hxy hxz, x.2.symm ▸ le_refl x.1⟩,
 
   top          := ⟨previous f ⊤, previous.fixed le_top⟩,
   le_top       := λ ⟨x, H⟩, le_Sup ⟨le_top, H.symm ▸ le_refl x⟩,
@@ -104,14 +103,14 @@ instance : complete_lattice (fixed_points f) :=
 
   Sup          := λ A, ⟨next f (Sup $ subtype.val '' A), next.fixed (aux3 f (subtype.val '' A) (λ z ⟨x, hx⟩, hx.2 ▸ x.2))⟩,
   le_Sup       := λ A x hxA, show x.1 ≤ _, from le_trans
-                    (le_Sup $ show _ ∈ subtype.val '' A, from ⟨x, hxA, rfl⟩)
+                    (le_Sup $ show x.1 ∈ subtype.val '' A, from ⟨x, hxA, rfl⟩)
                     next.le,
-  Sup_le       := λ A x Hx, Inf_le ⟨Sup_le $ λ z ⟨y, hyA, hyz⟩, hyz ▸ Hx _ hyA, x.2.symm ▸ le_refl _⟩,
+  Sup_le       := λ A x Hx, Inf_le ⟨Sup_le $ λ z ⟨y, hyA, hyz⟩, hyz ▸ Hx y hyA, x.2.symm ▸ le_refl x.1⟩,
 
-  Inf          := λ A, ⟨previous f (Inf $ subtype.val '' A), previous.fixed (aux4 f A)⟩,
-  le_Inf       := λ A x Hx, le_Sup ⟨le_Inf $ λ z ⟨y, hyA, hyz⟩, hyz ▸ Hx _ hyA, x.2.symm ▸ le_refl _⟩,
+  Inf          := λ A, ⟨previous f (Inf $ subtype.val '' A), previous.fixed (aux4 f (subtype.val '' A) (λ z ⟨x, hx⟩, hx.2 ▸ x.2))⟩,
+  le_Inf       := λ A x Hx, le_Sup ⟨le_Inf $ λ z ⟨y, hyA, hyz⟩, hyz ▸ Hx y hyA, x.2.symm ▸ le_refl x.1⟩,
   Inf_le       := λ A x hxA, show _ ≤ x.1, from le_trans
                     previous.le
-                    (Inf_le $ show _ ∈ subtype.val '' A, from ⟨x, hxA, rfl⟩) }
+                    (Inf_le $ show x.1 ∈ subtype.val '' A, from ⟨x, hxA, rfl⟩) }
 
 end fixed_points
