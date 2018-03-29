@@ -73,9 +73,8 @@ le_inf
   (x.2 ▸ is_ord_hom.apply_le_apply_of_le (x.2.symm ▸ inf_le_left))
   (y.2 ▸ is_ord_hom.apply_le_apply_of_le (y.2.symm ▸ inf_le_right))
 
-theorem aux3 (A : set $ fixed_points f) : Sup (subtype.val '' A) ≤ f (Sup (subtype.val '' A)) :=
-Sup_le $ λ z ⟨⟨x, hx⟩, hxA, hxz⟩, hxz ▸ show x ≤ f (Sup (subtype.val '' A)),
-from hx ▸ (is_ord_hom.apply_le_apply_of_le $ le_Sup ⟨⟨x, hx⟩, hxA, rfl⟩)
+theorem aux3 (A : set α) (HA : A ⊆ fixed_points f) : Sup A ≤ f (Sup A) :=
+Sup_le $ λ x hxA, (HA hxA) ▸ (is_ord_hom.apply_le_apply_of_le $ le_Sup hxA)
 
 theorem aux4 (A : set $ fixed_points f) : f (Inf (subtype.val '' A)) ≤ Inf (subtype.val '' A) :=
 le_Inf $ λ z ⟨⟨x, hx⟩, hxA, hxz⟩, hxz ▸ show f (Inf (subtype.val '' A)) ≤ x,
@@ -103,7 +102,7 @@ instance : complete_lattice (fixed_points f) :=
   bot          := ⟨next f ⊥, next.fixed bot_le⟩,
   bot_le       := λ ⟨x, H⟩, Inf_le ⟨bot_le, H.symm ▸ le_refl x⟩,
 
-  Sup          := λ A, ⟨next f (Sup $ subtype.val '' A), next.fixed (aux3 f A)⟩,
+  Sup          := λ A, ⟨next f (Sup $ subtype.val '' A), next.fixed (aux3 f (subtype.val '' A) (λ z ⟨x, hx⟩, hx.2 ▸ x.2))⟩,
   le_Sup       := λ A x hxA, show x.1 ≤ _, from le_trans
                     (le_Sup $ show _ ∈ subtype.val '' A, from ⟨x, hxA, rfl⟩)
                     next.le,
