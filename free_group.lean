@@ -32,9 +32,9 @@ variable (S : Type u)
 
 namespace free_group
 
-def ambient : Type (u+1) := Π (G : Type u) [group G] (f : S → G), G
+def ambient : Type (max u (v+1)) := Π (G : Type v) [group G] (f : S → G), G
 
-instance ambient.group : group (ambient S) :=
+instance ambient.group : group (ambient.{u v} S) :=
 by refine
 { mul := λ x y G HG f, @has_mul.mul _ (@semigroup.to_has_mul _ (@monoid.to_semigroup _ (@group.to_monoid G HG))) (@x G HG f) (@y G HG f),
   one := λ G HG f, @has_one.one _ (@monoid.to_has_one _ (@group.to_monoid G HG)),
@@ -49,7 +49,7 @@ def ambient.of_S : S → ambient S :=
 
 end free_group
 
-def free_group : Type (u+1) :=
+def free_group : Type (max u (v+1)) :=
 group.generate (free_group.ambient.of_S S '' set.univ)
 
 namespace free_group
@@ -60,7 +60,7 @@ def of_S : S → free_group S :=
 instance : group (free_group S) :=
 group.generate.group _
 
-variables (H : Type u) [group H] (f : S → H)
+variables (H : Type v) [group H] (f : S → H)
 
 def to_group : free_group S → H :=
 λ x, x.1 H f
@@ -71,7 +71,7 @@ def to_group.is_group_hom : is_group_hom (to_group S H f) :=
 def to_group.commute (x : S) : to_group S H f (of_S S x) = f x :=
 rfl
 
-variables (g : free_group S → H)
+variables (g : free_group.{u v} S → H)
 variables (Hg1 : is_group_hom g)
 variables (Hg2 : ∀ x, g (of_S S x) = f x)
 include Hg1 Hg2
