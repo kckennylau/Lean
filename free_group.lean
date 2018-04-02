@@ -226,6 +226,9 @@ namespace free_group
 
 variables (S : Type u)
 
+instance : group (free_group S) :=
+inv_mon.to_group.group _
+
 def of_type : S → free_group S :=
 λ x, ⟦[sum.inl x]⟧
 
