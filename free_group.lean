@@ -799,6 +799,12 @@ quotient.lift reduce $ λ L₁ L₂, reduce.rel
 def to_word.mk {x : free_group α} : ⟦to_word x⟧ = x :=
 quotient.induction_on x $ λ L₁, reduce.self
 
+def to_word.inj (x y : free_group α) : to_word x = to_word y → x = y :=
+quotient.induction_on₂ x y $ λ L₁ L₂, reduce.exact
+
+instance : decidable_eq (free_group α) :=
+function.injective.decidable_eq to_word.inj
+
 end reduce
 
 end free_group
