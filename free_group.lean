@@ -1,4 +1,4 @@
-/- 
+/-
 Copyright (c) 2018 Kenny Lau. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kenny Lau
@@ -13,11 +13,6 @@ universes u v w
 variables {α : Type u}
 
 namespace list
-
-theorem prefix_or_prefix_of_append_eq_append {L1 L2 L3 L4 : list α}
-  (H : L1 ++ L2 = L3 ++ L4) : L1 <+: L3 ∨ L3 <+: L1 :=
-@prefix_or_prefix_of_prefix _ L1 _ (L3 ++ L4)
-  (H ▸ prefix_append _ _) (prefix_append _ _)
 
 @[simp] lemma append_eq_has_append {L₁ L₂ : list α} : list.append L₁ L₂ = L₁ ++ L₂ := rfl
 
@@ -66,6 +61,33 @@ theorem red.sizeof : ∀ {L₁ L₂ : list (α × bool)}, red.step L₁ L₂ →
       exact nat.add_lt_add_left ih _ }
   end
 
+theorem red.bnot {x b} : red (L₁ ++ (x, b) :: (x, bnot b) :: L₂) (L₁ ++ L₂) :=
+red.step_trans red.step.bnot red.refl
+
+theorem red.step.cons_bnot {x b} : red.step ((x, b) :: (x, bnot b) :: L) L :=
+@red.step.bnot _ [] _ _ _
+
+theorem red.cons_bnot {x b} : red ((x, b) :: (x, bnot b) :: L) L :=
+@red.bnot _ [] _ _ _
+
+theorem red.step.append_left : ∀ {L₁ L₂ L₃ : list (α × bool)},
+  red.step L₂ L₃ → red.step (L₁ ++ L₂) (L₁ ++ L₃)
+| _ _ _ red.step.bnot := by rw [← list.append_assoc, ← list.append_assoc]; constructor
+
+theorem red.step.append_right : ∀ {L₁ L₂ L₃ : list (α × bool)},
+  red.step L₁ L₂ → red.step (L₁ ++ L₃) (L₂ ++ L₃)
+| _ _ _ red.step.bnot := by rw [list.append_assoc, list.append_assoc]; constructor
+
+theorem red.step.cons {x} (H : red.step L₁ L₂) : red.step (x :: L₁) (x :: L₂) :=
+@red.step.append_left _ [x] _ _ H
+
+theorem red.trans.aux (H12 : red L₁ L₂) : ∀ {L₃}, red L₂ L₃ → red L₁ L₃ :=
+red.rec_on H12 (λ _ _, id) $ λ _ _ _ H1 H2 ih L₃ H23,
+red.step_trans H1 $ ih H23
+
+@[trans] theorem red.trans (H12 : red L₁ L₂) (H23 : red L₂ L₃) : red L₁ L₃ :=
+red.trans.aux H12 H23
+
 theorem red.step.church_rosser (H12 : red.step L₁ L₂) (H13 : red.step L₁ L₃) :
   L₂ = L₃ ∨ ∃ L₄, red.step L₂ L₄ ∧ red.step L₃ L₄ :=
 begin
@@ -75,61 +97,38 @@ begin
   intro H13,
   induction H13 with L4 L5 x2 b2,
   clear L₁ L₂ L₃ L3,
-  cases list.prefix_or_prefix_of_append_eq_append H with H1 H1,
-  { cases H1 with L6 H1, subst H1,
-    rw list.append_assoc at H,
-    replace H := list.append_right_cancel H,
-    cases L6 with hd tl,
+  induction L1 with hd tl ih generalizing L4,
+  case list.nil
+  { cases L4 with hd1 tl1,
     case list.nil
     { injections, subst_vars, simp },
     case list.cons
-    { injections, subst_vars, clear H,
-      cases tl with hd tl,
+    { cases tl1 with hd2 tl2,
       case list.nil
       { injections, subst_vars, simp },
       case list.cons
-      { injections, subst_vars, simp,
+      { injections, subst_vars,
         right,
-        existsi L1 ++ tl ++ L5,
-        split,
-        { rw ← list.append_assoc,
-          constructor },
-        { rw list.append_assoc,
-          constructor } } } },
-  { cases H1 with L6 H1, subst H1,
-    rw list.append_assoc at H,
-    replace H := list.append_right_cancel H,
-    cases L6 with hd tl,
+        rw [list.cons_append, list.cons_append],
+        exact ⟨tl2 ++ L5, red.step.bnot, red.step.cons_bnot⟩ } } },
+  case list.cons
+  { cases L4 with hd1 tl1,
     case list.nil
-    { injections, subst_vars, simp },
-    case list.cons
     { injections, subst_vars, clear H,
-      cases tl with hd tl,
+      cases tl with hd1 tl1,
       case list.nil
       { injections, subst_vars, simp },
       case list.cons
-      { injections, subst_vars, simp,
+      { injections, subst_vars, simp at *,
         right,
-        existsi L4 ++ tl ++ L2,
-        split,
-        { rw list.append_assoc,
-          constructor },
-        { rw ← list.append_assoc,
-          constructor } } } }
+        exact ⟨tl1 ++ L2, red.step.cons_bnot, red.step.bnot⟩ } },
+    case list.cons
+    { injections with _ H1, subst_vars, simp,
+      rcases ih H1 with H2 | ⟨L₄, H3, H4⟩,
+      { left, assumption },
+      { right,
+        exact ⟨hd1 :: L₄, red.step.cons H3, red.step.cons H4⟩ } } }
 end
-
-theorem red.bnot {x b} : red (L₁ ++ (x, b) :: (x, bnot b) :: L₂) (L₁ ++ L₂) :=
-red.step_trans red.step.bnot red.refl
-
-theorem red.cons_bnot {x b} : red ((x, b) :: (x, bnot b) :: L) L :=
-@red.bnot _ [] _ _ _
-
-theorem red.trans.aux (H12 : red L₁ L₂) : ∀ {L₃}, red L₂ L₃ → red L₁ L₃ :=
-red.rec_on H12 (λ _ _, id) $ λ _ _ _ H1 H2 ih L₃ H23,
-red.step_trans H1 $ ih H23
-
-@[trans] theorem red.trans (H12 : red L₁ L₂) (H23 : red L₂ L₃) : red L₁ L₃ :=
-red.trans.aux H12 H23
 
 theorem church_rosser_1 : ∀ {L₁ L₂ L₃ : list (α × bool)},
   red.step L₁ L₂ → red L₁ L₃ →
@@ -177,14 +176,6 @@ quotient (free_group.setoid α)
 namespace free_group
 
 variables {α} {L L₁ L₂ L₃ L₄ : list (α × bool)}
-
-theorem red.step.append_left : ∀ {L₁ L₂ L₃ : list (α × bool)},
-  red.step L₂ L₃ → red.step (L₁ ++ L₂) (L₁ ++ L₃)
-| _ _ _ red.step.bnot := by rw [← list.append_assoc, ← list.append_assoc]; constructor
-
-theorem red.step.append_right : ∀ {L₁ L₂ L₃ : list (α × bool)},
-  red.step L₁ L₂ → red.step (L₁ ++ L₃) (L₂ ++ L₃)
-| _ _ _ red.step.bnot := by rw [list.append_assoc, list.append_assoc]; constructor
 
 theorem red.append : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)},
   red L₁ L₃ → red L₂ L₄ → red (L₁ ++ L₂) (L₃ ++ L₄)
