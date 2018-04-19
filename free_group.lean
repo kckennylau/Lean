@@ -91,15 +91,12 @@ red.trans.aux H12 H23
 theorem red.step.church_rosser.aux2 : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)} {x1 b1 x2 b2},
   L₁ ++ (x1, b1) :: (x1, bnot b1) :: L₂ = L₃ ++ (x2, b2) :: (x2, bnot b2) :: L₄ →
   L₁ ++ L₂ = L₃ ++ L₄ ∨ ∃ L₅, red.step (L₁ ++ L₂) L₅ ∧ red.step (L₃ ++ L₄) L₅
-| [] _ [] _ _ _ _ _ H  :=
-  by injections; subst_vars; simp
-| [] _ [(x3,b3)] _ _ _ _ _ H :=
-  by injections; subst_vars; simp
-| [(x3,b3)] _ [] _ _ _ _ _ H :=
-  by injections; subst_vars; simp
-| [] _ ((x3,b3)::(x4,b4)::tl) _ _ _ _ _ H :=
+| []        _ []        _ _ _ _ _ H := by injections; subst_vars; simp
+| []        _ [(x3,b3)] _ _ _ _ _ H := by injections; subst_vars; simp
+| [(x3,b3)] _ []        _ _ _ _ _ H := by injections; subst_vars; simp
+| []                     _ ((x3,b3)::(x4,b4)::tl) _ _ _ _ _ H :=
   by injections; subst_vars; simp; right; exact ⟨_, red.step.bnot, red.step.cons_bnot⟩
-| ((x3,b3)::(x4,b4)::tl) _ [] _ _ _ _ _ H :=
+| ((x3,b3)::(x4,b4)::tl) _ []                     _ _ _ _ _ H :=
   by injections; subst_vars; simp; right; exact ⟨_, red.step.cons_bnot, red.step.bnot⟩
 | ((x3,b3)::tl) _ ((x4,b4)::tl2) _ _ _ _ _ H :=
   let ⟨H1, H2⟩ := list.cons.inj H in
