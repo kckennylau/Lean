@@ -23,10 +23,7 @@ namespace is_group_hom
 variables {β : Type v} [group α] [group β]
 variables (f : α → β) [is_group_hom f]
 
-instance is_group_hom.id [group α] : is_group_hom (@id α) :=
-⟨λ _ _, rfl⟩
-
-instance is_group_hom.range_subgroup : is_subgroup (set.range f) :=
+instance range_subgroup : is_subgroup (set.range f) :=
 @set.image_univ _ _ f ▸ is_group_hom.image_subgroup f set.univ
 
 end is_group_hom
@@ -102,7 +99,8 @@ theorem red.step.church_rosser.aux2 : ∀ {L₁ L₂ L₃ L₄ : list (α × boo
   let ⟨H1, H2⟩ := list.cons.inj H in
   match red.step.church_rosser.aux2 H2 with
     | or.inl H3 := or.inl $ by simp [H1, H3]
-    | or.inr ⟨L₅, H3, H4⟩ := or.inr ⟨_, red.step.cons H3, by simpa [H1] using red.step.cons H4⟩
+    | or.inr ⟨L₅, H3, H4⟩ := or.inr
+      ⟨_, red.step.cons H3, by simpa [H1] using red.step.cons H4⟩
   end
 
 theorem red.step.church_rosser.aux : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)},
@@ -191,8 +189,8 @@ theorem rel.inv : L₁ ≈ L₂ → inv L₁ ≈ inv L₂ :=
 theorem red.inv_append : ∀ {L : list (α × bool)}, red (inv L ++ L) []
 | []     := red.refl
 | ((x,b)::t) :=
-  have H1 : inv t ++ (x, bnot b) :: (x, bnot (bnot b)) :: t = inv ((x, b) :: t) ++ (x, b) :: t,
-    by simp [inv],
+  have H1 : inv t ++ (x, bnot b) :: (x, bnot (bnot b)) :: t
+    = inv ((x, b) :: t) ++ (x, b) :: t, by simp [inv],
   H1 ▸ red.trans (red.bnot) red.inv_append
 
 instance : group (free_group α) :=
@@ -246,7 +244,8 @@ variables {β : Type v} [group β] (f : α → β) {x y : free_group α}
 def to_group.aux : list (α × bool) → β :=
 λ L, list.prod $ L.map $ λ x, cond x.2 (f x.1) (f x.1)⁻¹
 
-def red.to_group {f : α → β} (H : red L₁ L₂) : to_group.aux f L₁ = to_group.aux f L₂ :=
+def red.to_group {f : α → β} (H : red L₁ L₂) :
+  to_group.aux f L₁ = to_group.aux f L₂ :=
 red.rec_on H (λ _, rfl) $ λ _ _ _ H1 H2 ih,
 eq.trans (by cases H1 with _ _ _ b; cases b; simp [to_group.aux]) ih
 
@@ -256,7 +255,8 @@ quotient.lift (to_group.aux f) $ λ L₁ L₂ ⟨L₃, H13, H23⟩,
 
 variable {f}
 
-@[simp] lemma to_group.mk : to_group f ⟦L⟧ = list.prod (L.map $ λ x, cond x.2 (f x.1) (f x.1)⁻¹) :=
+@[simp] lemma to_group.mk : to_group f ⟦L⟧ =
+  list.prod (L.map $ λ x, cond x.2 (f x.1) (f x.1)⁻¹) :=
 rfl
 
 @[simp] lemma to_group.of {x} : to_group f (of x) = f x :=
@@ -297,7 +297,8 @@ bool.rec_on b
     (is_subgroup.inv_mem $ H ⟨x, rfl⟩) ih)
   (by simp at ih ⊢; from is_submonoid.mul_mem (H ⟨x, rfl⟩) ih))
 
-theorem to_group.range_eq_closure : set.range (to_group f) = group.closure (set.range f) :=
+theorem to_group.range_eq_closure :
+  set.range (to_group f) = group.closure (set.range f) :=
 set.subset.antisymm
   (to_group.range_subset group.subset_closure)
   (group.closure_subset $ λ y ⟨x, hx⟩, ⟨of x, by simpa⟩)
@@ -337,7 +338,8 @@ quotient.induction_on x $ λ L, quotient.sound $ by simp [map.aux, H1]
 
 @[simp] lemma map.id' : map (λ z, z) x = x := map.id
 
-theorem map.comp {γ : Type w} {f : α → β} {g : β → γ} {x} : map g (map f x) = map (g ∘ f) x :=
+theorem map.comp {γ : Type w} {f : α → β} {g : β → γ} {x} :
+  map g (map f x) = map (g ∘ f) x :=
 quotient.induction_on x $ λ L, quotient.sound $ by simp [map.aux]
 
 @[simp] lemma map.of {x} : map f (of x) = of (f x) := rfl
@@ -380,7 +382,8 @@ to_group id x
 
 variables {x y}
 
-@[simp] protected lemma prod.quotient.mk : prod ⟦L⟧ = list.prod (L.map $ λ x, cond x.2 x.1 x.1⁻¹) :=
+@[simp] protected lemma prod.quotient.mk :
+  prod ⟦L⟧ = list.prod (L.map $ λ x, cond x.2 x.1 x.1⁻¹) :=
 rfl
 
 @[simp] lemma prod.of {x : α} : prod (of x) = x :=
@@ -413,7 +416,8 @@ def sum : α :=
 
 variables {x y}
 
-@[simp] lemma sum.mk : sum ⟦L⟧ = list.sum (L.map $ λ x, cond x.2 x.1 (-x.1)) :=
+@[simp] protected lemma sum.quotient.mk :
+  sum ⟦L⟧ = list.sum (L.map $ λ x, cond x.2 x.1 (-x.1)) :=
 rfl
 
 @[simp] lemma sum.of {x : α} : sum (of x) = x :=
@@ -439,8 +443,6 @@ def free_group_empty_equiv_unit : free_group empty ≃ unit :=
   left_inv  := λ x, quotient.induction_on x $ λ L,
     match L with [] := rfl end,
   right_inv := λ ⟨⟩, rfl }
-
-local attribute [elab_as_eliminator] int.induction_on
 
 def free_group_unit_equiv_int : free_group unit ≃ int :=
 { to_fun    := λ x, sum $ map (λ _, 1) x,
