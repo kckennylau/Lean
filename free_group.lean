@@ -19,15 +19,22 @@ theorem prefix_or_prefix_of_append_eq_append {L1 L2 L3 L4 : list α}
 @prefix_or_prefix_of_prefix _ L1 _ (L3 ++ L4)
   (H ▸ prefix_append _ _) (prefix_append _ _)
 
-theorem cons_eq_of_eq {x} {L₁ L₂ : list α} (H : L₁ = L₂) : x :: L₁ = x :: L₂ :=
-congr_arg _ H
-
 @[simp] lemma append_eq_has_append {L₁ L₂ : list α} : list.append L₁ L₂ = L₁ ++ L₂ := rfl
 
 end list
 
+namespace is_group_hom
+
+variables {β : Type v} [group α] [group β]
+variables (f : α → β) [is_group_hom f]
+
 instance is_group_hom.id [group α] : is_group_hom (@id α) :=
 ⟨λ _ _, rfl⟩
+
+instance is_group_hom.range_subgroup : is_subgroup (set.range f) :=
+@set.image_univ _ _ f ▸ is_group_hom.image_subgroup f set.univ
+
+end is_group_hom
 
 namespace free_group
 
@@ -117,9 +124,6 @@ red.step_trans red.step.bnot red.refl
 theorem red.cons_bnot {x b} : red ((x, b) :: (x, bnot b) :: L) L :=
 @red.bnot _ [] _ _ _
 
-theorem red.of_step (H : step L₁ L₂) : red L₁ L₂ :=
-red.step_trans H red.refl
-
 theorem red.trans.aux (H12 : red L₁ L₂) : ∀ {L₃}, red L₂ L₃ → red L₁ L₃ :=
 red.rec_on H12 (λ _ _, id) $ λ _ _ _ H1 H2 ih L₃ H23,
 red.step_trans H1 $ ih H23
@@ -186,11 +190,11 @@ theorem red.append : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)},
   red L₁ L₃ → red L₂ L₄ → red (L₁ ++ L₂) (L₃ ++ L₄)
 | _ _ _ _ red.refl red.refl := red.refl
 | _ _ _ _ red.refl (red.step_trans H3 H4) :=
-    have _ := red.sizeof H3,
-    red.step_trans (red.step.append_left H3) (red.append red.refl H4)
+  have _ := red.sizeof H3,
+  red.step_trans (red.step.append_left H3) (red.append red.refl H4)
 | _ _ _ _ (red.step_trans H1 H2) H3 :=
-    have _ := red.sizeof H1,
-    red.step_trans (red.step.append_right H1) (red.append H2 H3)
+  have _ := red.sizeof H1,
+  red.step_trans (red.step.append_right H1) (red.append H2 H3)
 
 theorem red.cons (H : red L₁ L₂) {x} : red (x :: L₁) (x :: L₂) :=
 red.append (@red.refl _ [x]) H
@@ -202,32 +206,19 @@ theorem rel.append : L₁ ≈ L₃ → L₂ ≈ L₄ → (L₁ ++ L₂) ≈ (L�
 def inv : list (α × bool) → list (α × bool) :=
 λ L, (L.map $ λ x : α × bool, (x.1, bnot x.2)).reverse
 
-@[simp] protected lemma inv_inv : inv (inv L) = L :=
-have H1 : (λ (x : α × bool), (x.fst, bnot (x.snd))) ∘ (λ (x : α × bool), (x.fst, bnot (x.snd))) = id,
-  by funext; simp,
-by simp [inv, H1]
-
 theorem red.inv (H : red L₁ L₂) : red (inv L₁) (inv L₂) :=
 red.rec_on H (λ _, red.refl) $ λ _ _ _ H1 H2 ih,
 red.step_trans (by cases H1; simp [inv]; constructor) ih
-
-theorem red.step.bnot_rev {x b} : red.step (L₁ ++ (x, bnot b) :: (x, b) :: L₂) (L₁ ++ L₂) :=
-by simpa using @red.step.bnot _ L₁ L₂ x (bnot b)
-
-theorem red.reverse (H : red L₁ L₂) : red L₁.reverse L₂.reverse :=
-red.rec_on H (λ _, red.refl) $ λ _ _ _ H1 H2 ih,
-red.step_trans (by cases H1; simpa using red.step.bnot_rev) ih
 
 theorem rel.inv : L₁ ≈ L₂ → inv L₁ ≈ inv L₂ :=
 λ ⟨L₃, H13, H23⟩, ⟨inv L₃, red.inv H13, red.inv H23⟩
 
 theorem red.inv_append : ∀ {L : list (α × bool)}, red (inv L ++ L) []
 | []     := red.refl
-| (h::t) := let (x, b) := h in
-  have H1 : _ := @red.inv_append t,
-  have H2 : inv t ++ (x, bnot b) :: (x, bnot (bnot b)) :: t = inv ((x, b) :: t) ++ (x, b) :: t,
+| ((x,b)::t) :=
+  have H1 : inv t ++ (x, bnot b) :: (x, bnot (bnot b)) :: t = inv ((x, b) :: t) ++ (x, b) :: t,
     by simp [inv],
-  H2 ▸ red.trans (red.bnot) H1
+  H1 ▸ red.trans (red.bnot) red.inv_append
 
 instance : group (free_group α) :=
 { mul := quotient.lift₂ (λ L₁ L₂, ⟦L₁ ++ L₂⟧) $
@@ -321,6 +312,20 @@ quotient.induction_on x $ λ L, list.rec_on L (is_group_hom.one g) $
 
 theorem to_group.of_eq (x : free_group α) : to_group of x = x :=
 eq.symm $ to_group.unique id (λ x, rfl)
+
+theorem to_group.range_subset {s : set β} [is_subgroup s] (H : set.range f ⊆ s) :
+  set.range (to_group f) ⊆ s :=
+λ y ⟨x, H1⟩, H1 ▸ (quotient.induction_on x $ λ L,
+list.rec_on L (is_submonoid.one_mem s) $ λ ⟨x, b⟩ tl ih,
+bool.rec_on b
+  (by simp at ih ⊢; from is_submonoid.mul_mem
+    (is_subgroup.inv_mem $ H ⟨x, rfl⟩) ih)
+  (by simp at ih ⊢; from is_submonoid.mul_mem (H ⟨x, rfl⟩) ih))
+
+theorem to_group.range_eq_closure : set.range (to_group f) = group.closure (set.range f) :=
+set.subset.antisymm
+  (to_group.range_subset group.subset_closure)
+  (group.closure_subset $ λ y ⟨x, hx⟩, ⟨of x, by simpa⟩)
 
 end to_group
 
@@ -456,70 +461,20 @@ end sum
 def free_group_empty_equiv_unit : free_group empty ≃ unit :=
 { to_fun    := λ _, (),
   inv_fun   := λ _, 1,
-  left_inv  := λ x, quotient.induction_on x $ λ L, match L with [] := rfl end,
+  left_inv  := λ x, quotient.induction_on x $ λ L,
+    match L with [] := rfl end,
   right_inv := λ ⟨⟩, rfl }
+
+local attribute [elab_as_eliminator] int.induction_on
 
 def free_group_unit_equiv_int : free_group unit ≃ int :=
 { to_fun    := λ x, sum $ map (λ _, 1) x,
   inv_fun   := λ x, of () ^ x,
-  left_inv  := λ x, quotient.induction_on x $ λ L,
-    begin
-      induction L with hd tl ih,
-      case list.nil
-      { refl },
-      case list.cons
-      { rcases hd with ⟨⟨⟩, _ | _⟩;
-        simp [function.comp, gpow_add] at ih ⊢;
-        rw ih; refl }
-    end,
-  right_inv := λ x,
-    begin
-      dsimp,
-      apply int.induction_on x,
-      { simp },
-      { intros i ih, simp [gpow_add, ih] },
-      { intros i ih, simp [gpow_add, ih] }
-    end }
-
-theorem useless [group α] (s : set α) :
-  set.range (@free_group.to_group s _ _ subtype.val) = group.closure s :=
-begin
-  apply set.ext,
-  intro z,
-  split,
-  { intro h,
-    rcases h with ⟨x, H⟩,
-    subst H,
-    apply quotient.induction_on x, clear x,
-    intro L,
-    induction L with hd tl ih,
-    case list.nil
-    { simp [is_submonoid.one_mem] },
-    case list.cons
-    { simp at ih ⊢,
-      apply is_submonoid.mul_mem,
-      { rcases hd with ⟨x, _ | _⟩,
-        { simp [is_subgroup.inv_mem (group.subset_closure x.2)] },
-        { simp [group.subset_closure x.2] } },
-      { assumption } } },
-  { intro H,
-    induction H with x H x H ih x1 x2 H1 H2 ih1 ih2,
-    case group.in_closure.basic
-    { existsi (of (⟨x, H⟩ : s)),
-      simp },
-    case group.in_closure.one
-    { existsi (1 : free_group s),
-      simp },
-    case group.in_closure.inv
-    { cases ih with y h,
-      existsi y⁻¹,
-      simp [h] },
-    case group.in_closure.mul
-    { cases ih1 with y1 h1,
-      cases ih2 with y2 h2,
-      existsi y1 * y2,
-      simp [h1, h2] } }
-end
+  left_inv  := λ x, quotient.induction_on x $ λ L, list.rec_on L rfl $
+    λ ⟨⟨⟩, b⟩ tl ih, by cases b; simp [function.comp, gpow_add] at ih ⊢; rw ih; refl,
+  right_inv := λ x, int.induction_on x (by simp)
+    (λ i ih, by simp at ih; simp [gpow_add, ih])
+    (λ i ih, by simp at ih; simp [gpow_add, ih]) }
 
 section reduce
 
@@ -553,15 +508,17 @@ by simpa using @reduce.core.red _ L.reverse _ []
 theorem reduce.step.not : ∀ {L₂ : list (α × bool)} {x1 b1 x2 b2},
   (x2, b2) :: (x2, bnot b2) :: L₁ <:+ reduce.step L₂ (x1, b1) →
   (x2, b2) :: (x2, bnot b2) :: L₁ <:+ L₂
-| []            _  _  _ _ ⟨L, H⟩            :=
+| []            _  _  _ _ ⟨L, H⟩ :=
   by cases L with _ tl; injections; cases tl; injections
-| ((x3,b3)::tl) x1 b1 _ _ ⟨[], H⟩           := if h : x3 = x1 ∧ b3 = bnot b1
-  then by simp [reduce.step, h] at H; subst H; from list.suffix_cons _ _
-  else by simp [reduce.step, h] at H; cases_matching* _ ∧ _; cc
-| ((x3,b3)::tl) x1 b1 _ _ ⟨(x4,b4)::tl2, H⟩ := if h : x3 = x1 ∧ b3 = bnot b1
+| ((x3,b3)::tl) x1 b1 _ _ ⟨L, H⟩ := if h : x3 = x1 ∧ b3 = bnot b1
   then by simp [reduce.step, h] at H; subst H;
-    rw [← list.cons_append, ← list.cons_append]; from list.suffix_append _ _
-  else by simp [reduce.step, h] at H; rw ← H.2; from list.suffix_append _ _
+    rw ← list.cons_append; from list.suffix_append _ _
+  else begin
+    simp [reduce.step, h] at H,
+    cases L; injections, {cc},
+    rw ← h_2,
+    exact list.suffix_append _ _
+  end
 
 theorem reduce.core.not {x b} : ∀ {L₁},
   (x, b) :: (x, bnot b) :: L <:+ reduce.core L₁ L₂ →
