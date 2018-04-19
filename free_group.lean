@@ -88,47 +88,34 @@ red.step_trans H1 $ ih H23
 @[trans] theorem red.trans (H12 : red L₁ L₂) (H23 : red L₂ L₃) : red L₁ L₃ :=
 red.trans.aux H12 H23
 
+theorem red.step.church_rosser.aux2 : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)} {x1 b1 x2 b2},
+  L₁ ++ (x1, b1) :: (x1, bnot b1) :: L₂ = L₃ ++ (x2, b2) :: (x2, bnot b2) :: L₄ →
+  L₁ ++ L₂ = L₃ ++ L₄ ∨ ∃ L₅, red.step (L₁ ++ L₂) L₅ ∧ red.step (L₃ ++ L₄) L₅
+| [] _ [] _ _ _ _ _ H  :=
+  by injections; subst_vars; simp
+| [] _ [(x3,b3)] _ _ _ _ _ H :=
+  by injections; subst_vars; simp
+| [(x3,b3)] _ [] _ _ _ _ _ H :=
+  by injections; subst_vars; simp
+| [] _ ((x3,b3)::(x4,b4)::tl) _ _ _ _ _ H :=
+  by injections; subst_vars; simp; right; exact ⟨_, red.step.bnot, red.step.cons_bnot⟩
+| ((x3,b3)::(x4,b4)::tl) _ [] _ _ _ _ _ H :=
+  by injections; subst_vars; simp; right; exact ⟨_, red.step.cons_bnot, red.step.bnot⟩
+| ((x3,b3)::tl) _ ((x4,b4)::tl2) _ _ _ _ _ H :=
+  let ⟨H1, H2⟩ := list.cons.inj H in
+  match red.step.church_rosser.aux2 H2 with
+    | or.inl H3 := or.inl $ by simp [H1, H3]
+    | or.inr ⟨L₅, H3, H4⟩ := or.inr ⟨_, red.step.cons H3, by simpa [H1] using red.step.cons H4⟩
+  end
+
+theorem red.step.church_rosser.aux : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)},
+  red.step L₁ L₃ → red.step L₂ L₄ → L₁ = L₂ →
+  L₃ = L₄ ∨ ∃ L₅, red.step L₃ L₅ ∧ red.step L₄ L₅
+| _ _ _ _ red.step.bnot red.step.bnot H := red.step.church_rosser.aux2 H
+
 theorem red.step.church_rosser (H12 : red.step L₁ L₂) (H13 : red.step L₁ L₃) :
   L₂ = L₃ ∨ ∃ L₄, red.step L₂ L₄ ∧ red.step L₃ L₄ :=
-begin
-  induction H12 with L1 L2 x1 b1,
-  revert H13,
-  generalize H : L1 ++ (x1, b1) :: (x1, bnot b1) :: L2 = L3,
-  intro H13,
-  induction H13 with L4 L5 x2 b2,
-  clear L₁ L₂ L₃ L3,
-  induction L1 with hd tl ih generalizing L4,
-  case list.nil
-  { cases L4 with hd1 tl1,
-    case list.nil
-    { injections, subst_vars, simp },
-    case list.cons
-    { cases tl1 with hd2 tl2,
-      case list.nil
-      { injections, subst_vars, simp },
-      case list.cons
-      { injections, subst_vars,
-        right,
-        rw [list.cons_append, list.cons_append],
-        exact ⟨tl2 ++ L5, red.step.bnot, red.step.cons_bnot⟩ } } },
-  case list.cons
-  { cases L4 with hd1 tl1,
-    case list.nil
-    { injections, subst_vars, clear H,
-      cases tl with hd1 tl1,
-      case list.nil
-      { injections, subst_vars, simp },
-      case list.cons
-      { injections, subst_vars, simp at *,
-        right,
-        exact ⟨tl1 ++ L2, red.step.cons_bnot, red.step.bnot⟩ } },
-    case list.cons
-    { injections with _ H1, subst_vars, simp,
-      rcases ih H1 with H2 | ⟨L₄, H3, H4⟩,
-      { left, assumption },
-      { right,
-        exact ⟨hd1 :: L₄, red.step.cons H3, red.step.cons H4⟩ } } }
-end
+red.step.church_rosser.aux H12 H13 rfl
 
 theorem church_rosser_1 : ∀ {L₁ L₂ L₃ : list (α × bool)},
   red.step L₁ L₂ → red L₁ L₃ →
