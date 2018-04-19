@@ -22,6 +22,8 @@ theorem prefix_or_prefix_of_append_eq_append {L1 L2 L3 L4 : list α}
 theorem cons_eq_of_eq {x} {L₁ L₂ : list α} (H : L₁ = L₂) : x :: L₁ = x :: L₂ :=
 congr_arg _ H
 
+@[simp] lemma append_eq_has_append {L₁ L₂ : list α} : list.append L₁ L₂ = L₁ ++ L₂ := rfl
+
 end list
 
 instance is_group_hom.id [group α] : is_group_hom (@id α) :=
@@ -29,224 +31,127 @@ instance is_group_hom.id [group α] : is_group_hom (@id α) :=
 
 namespace free_group
 
+inductive red.step : list (α × bool) → list (α × bool) → Prop
+| bnot {L₁ L₂ x b} : red.step (L₁ ++ (x, b) :: (x, bnot b) :: L₂) (L₁ ++ L₂)
+
 inductive red : list (α × bool) → list (α × bool) → Prop
 | refl {L} : red L L
-| trans_bnot {L₁ L₂ L₃ x b} : red L₁ (L₂ ++ (x, b) :: (x, bnot b) :: L₃) → red L₁ (L₂ ++ L₃)
+| step_trans {L₁ L₂ L₃} (H : free_group.red.step L₁ L₂) :
+    red L₂ L₃ → red L₁ L₃
 
 attribute [refl] red.refl
 
 variables {L L₁ L₂ L₃ L₄ : list (α × bool)}
 
+theorem red.sizeof : ∀ {L₁ L₂ : list (α × bool)}, red.step L₁ L₂ → L₂.sizeof < L₁.sizeof
+| _ _ (@red.step.bnot _ L1 L2 x b) :=
+  begin
+    induction L1 with hd tl ih,
+    case list.nil
+    { dsimp [list.sizeof],
+      have H : 1 + sizeof (x, b) + (1 + sizeof (x, bnot b) + list.sizeof L2)
+        = (list.sizeof L2 + 1) + (sizeof (x, b) + sizeof (x, bnot b) + 1),
+      { ac_refl },
+      rw H,
+      exact nat.le_add_right _ _ },
+    case list.cons
+    { dsimp [list.sizeof],
+      exact nat.add_lt_add_left ih _ }
+  end
+
+theorem red.step.church_rosser (H12 : red.step L₁ L₂) (H13 : red.step L₁ L₃) :
+  L₂ = L₃ ∨ ∃ L₄, red.step L₂ L₄ ∧ red.step L₃ L₄ :=
+begin
+  induction H12 with L1 L2 x1 b1,
+  revert H13,
+  generalize H : L1 ++ (x1, b1) :: (x1, bnot b1) :: L2 = L3,
+  intro H13,
+  induction H13 with L4 L5 x2 b2,
+  clear L₁ L₂ L₃ L3,
+  cases list.prefix_or_prefix_of_append_eq_append H with H1 H1,
+  { cases H1 with L6 H1, subst H1,
+    rw list.append_assoc at H,
+    replace H := list.append_right_cancel H,
+    cases L6 with hd tl,
+    case list.nil
+    { injections, subst_vars, simp },
+    case list.cons
+    { injections, subst_vars, clear H,
+      cases tl with hd tl,
+      case list.nil
+      { injections, subst_vars, simp },
+      case list.cons
+      { injections, subst_vars, simp,
+        right,
+        existsi L1 ++ tl ++ L5,
+        split,
+        { rw ← list.append_assoc,
+          constructor },
+        { rw list.append_assoc,
+          constructor } } } },
+  { cases H1 with L6 H1, subst H1,
+    rw list.append_assoc at H,
+    replace H := list.append_right_cancel H,
+    cases L6 with hd tl,
+    case list.nil
+    { injections, subst_vars, simp },
+    case list.cons
+    { injections, subst_vars, clear H,
+      cases tl with hd tl,
+      case list.nil
+      { injections, subst_vars, simp },
+      case list.cons
+      { injections, subst_vars, simp,
+        right,
+        existsi L4 ++ tl ++ L2,
+        split,
+        { rw list.append_assoc,
+          constructor },
+        { rw ← list.append_assoc,
+          constructor } } } }
+end
+
 theorem red.bnot {x b} : red (L₁ ++ (x, b) :: (x, bnot b) :: L₂) (L₁ ++ L₂) :=
-red.trans_bnot red.refl
+red.step_trans red.step.bnot red.refl
 
 theorem red.cons_bnot {x b} : red ((x, b) :: (x, bnot b) :: L) L :=
 @red.bnot _ [] _ _ _
 
-theorem red.length (H : red L₁ L₂) : ∃ n, L₁.length = L₂.length + 2 * n :=
-begin
-  induction H with L1 L1 L2 L3 x b H ih,
-  case red.refl
-  { exact ⟨0, rfl⟩ },
-  case red.trans_bnot
-  { cases ih with n ih,
-    existsi nat.succ n,
-    change _ = list.length _ + 2 * n + 2,
-    rw [ih, list.length_append, list.length_append],
-    change _ + L3.length + 2 + 2 * n = _,
-    ac_refl }
-end
+theorem red.of_step (H : step L₁ L₂) : red L₁ L₂ :=
+red.step_trans H red.refl
+
+theorem red.trans.aux (H12 : red L₁ L₂) : ∀ {L₃}, red L₂ L₃ → red L₁ L₃ :=
+red.rec_on H12 (λ _ _, id) $ λ _ _ _ H1 H2 ih L₃ H23,
+red.step_trans H1 $ ih H23
 
 @[trans] theorem red.trans (H12 : red L₁ L₂) (H23 : red L₂ L₃) : red L₁ L₃ :=
-begin
-  induction H23 with L1 L1 L2 L3 x b H ih generalizing L₁,
-  case red.refl
-  { assumption },
-  case red.trans_bnot
-  { exact red.trans_bnot (ih H12) }
-end
+red.trans.aux H12 H23
 
-theorem church_rosser_1 {x b} (H : red (L₁ ++ (x, b) :: (x, bnot b) :: L₂) L₃) :
-  red (L₁ ++ L₂) L₃ ∨
-  ∃ L₄ L₅ x' b', L₃ = L₄ ++ (x', b') :: (x', bnot b') :: L₅ ∧ red (L₁ ++ L₂) (L₄ ++ L₅) :=
-begin
-  revert H,
-  generalize HL12 : L₁ ++ (x, b) :: (x, bnot b) :: L₂ = L12,
-  intro H,
-  induction H with L1 L1 L2 L3 x1 b1 H1 ih1,
-  case red.refl
-  { right,
-    subst HL12,
-    exact ⟨_, _, _, _, rfl, red.refl⟩ },
-  case free_group.red.trans_bnot
-  { specialize ih1 HL12,
-    rcases ih1 with ih1 | ⟨L₄, L₅, x', b', H2, H3⟩,
-    { left,
-      apply red.trans_bnot ih1 },
-    { cases list.prefix_or_prefix_of_append_eq_append H2 with H4 H4,
-      { cases H4 with L4 H4,
-        subst H4,
-        rw list.append_assoc at H2,
-        replace H2 := list.append_right_cancel H2,
-        change [(x1, b1)] ++ _ = _ at H2,
-        cases list.prefix_or_prefix_of_append_eq_append H2 with H4 H4,
-        { cases H4 with L5 H4,
-          subst H4,
-          rw list.append_assoc at H2,
-          replace H2 := list.append_right_cancel H2,
-          change [(x1, bnot b1)] ++ _ = _ at H2,
-          cases list.prefix_or_prefix_of_append_eq_append H2 with H4 H4,
-          { cases H4 with L6 H4,
-            subst H4,
-            rw list.append_assoc at H2,
-            replace H2 := list.append_right_cancel H2,
-            subst H2,
-            right,
-            rw ← list.append_assoc,
-            existsi [_, _, _, _, rfl],
-            change red (L₁ ++ L₂) (L2 ++ ((x1, b1) :: (x1, bnot b1) :: L6) ++ L₅) at H3,
-            rw list.append_assoc,
-            rw [list.append_assoc, list.cons_append, list.cons_append] at H3,
-            exact red.trans_bnot H3 },
-          { cases H4 with L6 H4,
-            cases L5 with hd tl,
-            case list.nil
-            { dsimp at H2 H4,
-              subst H4,
-              cases list.cons.inj H2 with H4 H6,
-              cases prod.mk.inj H4 with H4 H5,
-              subst_vars, clear H2 H4,
-              left,
-              simpa using H3 },
-            case list.cons
-            { cases list.cons.inj H4 with H5 H6,
-              change _ ++ _ = _ at H6,
-              rw list.append_eq_nil at H6,
-              cases H6 with H6 H7,
-              subst_vars, clear H4,
-              replace H2 := list.append_right_cancel H2,
-              subst H2,
-              right,
-              existsi [_, _, _, _, rfl],
-              rw list.append_assoc at H3,
-              exact red.trans_bnot H3 } } },
-        { cases H4 with L5 H4,
-          cases L4 with hd tl,
-          case list.nil
-          { dsimp at H2 H4,
-            subst H4,
-            cases list.cons.inj H2 with H4 H6, clear H4,
-            cases list.cons.inj H6 with H4 H6,
-            cases prod.mk.inj H4 with H4 H5,
-            subst_vars, clear H2 H4 H6,
-            left,
-            simpa using H3 },
-          case list.cons
-          { cases list.cons.inj H4 with H5 H6,
-            change _ ++ _ = _ at H6,
-            rw list.append_eq_nil at H6,
-            cases H6 with H6 H7,
-            subst_vars, clear H4,
-            replace H2 := list.append_right_cancel H2,
-            cases list.cons.inj H2 with H4 H6,
-            cases prod.mk.inj H4 with H4 H5,
-            subst_vars,
-            left,
-            simpa using H3 } } },
-      { cases H4 with L4 H4,
-        subst H4,
-        rw list.append_assoc at H2,
-        replace H2 := list.append_right_cancel H2,
-        change _ = [(x', b')] ++ _ at H2,
-        cases list.prefix_or_prefix_of_append_eq_append H2 with H4 H4,
-        { cases H4 with L5 H4,
-          cases L4 with hd tl,
-          case list.nil
-          { dsimp at H2 H4,
-            subst H4,
-            cases list.cons.inj H2 with H4 H6,
-            cases list.cons.inj H6 with H4 H6, clear H4,
-            subst H6,
-            left,
-            simpa using H3 },
-          case list.cons
-          { cases list.cons.inj H4 with H5 H6,
-            change _ ++ _ = _ at H6,
-            rw list.append_eq_nil at H6,
-            cases H6 with H6 H7,
-            subst_vars,
-            replace H2 := list.append_right_cancel H2,
-            cases list.cons.inj H2 with H4 H6,
-            cases prod.mk.inj H4 with H4 H5,
-            subst_vars,
-            left,
-            simpa using H3 } },
-        { cases H4 with L5 H4,
-          subst H4,
-          rw list.append_assoc at H2,
-          replace H2 := list.append_right_cancel H2,
-          change _ = [(x', bnot b')] ++ _ at H2,
-          cases list.prefix_or_prefix_of_append_eq_append H2 with H4 H4,
-          { cases H4 with L6 H4,
-            cases L5 with hd tl,
-            case list.nil
-            { simp at H2,
-              cases H2 with H5 H7,
-              cases H5 with H5 H6,
-              subst_vars,
-              left,
-              simpa using H3 },
-            case list.cons
-            { simp at H4,
-              rcases H4 with ⟨_, _, _⟩,
-              simp at H2,
-              cases H2,
-              subst_vars,
-              right,
-              rw list.append_assoc,
-              existsi [_, _, _, _, rfl],
-              exact red.trans_bnot H3 } },
-          { cases H4 with L6 H4,
-            subst H4,
-            simp at H2,
-            subst H2,
-            right,
-            rw list.append_assoc,
-            existsi [_, _, _, _, rfl],
-            change red _ (L₄ ++ (L6 ++ L3)),
-            rw ← list.append_assoc at H3 ⊢,
-            exact red.trans_bnot H3 } } } } }
-end
+theorem church_rosser_1 : ∀ {L₁ L₂ L₃ : list (α × bool)},
+  red.step L₁ L₂ → red L₁ L₃ →
+  red L₂ L₃ ∨ ∃ L₄, red L₂ L₄ ∧ step L₃ L₄
+| _ _ _ H12 red.refl := or.inr ⟨_, red.refl, H12⟩
+| _ _ _ H12 (red.step_trans H1 H2) :=
+  have _ := red.sizeof H1,
+  match red.step.church_rosser H12 H1 with
+    | or.inl H3 := or.inl $ H3.symm ▸ H2
+    | or.inr ⟨L1, H3, H4⟩ := match church_rosser_1 H4 H2 with
+      | or.inl H5 := or.inl $ red.step_trans H3 H5
+      | or.inr ⟨L2, H5, H6⟩ := or.inr $ ⟨L2, red.step_trans H3 H5, H6⟩
+      end
+  end
 
-theorem church_rosser (H12 : red L₁ L₂) (H13: red L₁ L₃) :
-  ∃ L₄, red L₂ L₄ ∧ red L₃ L₄ :=
-begin
-  induction H12 with L1 L1 L2 L3 x1 b1 H1 ih1 generalizing L₃,
-  case red.refl
-  { exact ⟨L₃, H13, red.refl⟩ },
-  case red.trans_bnot
-  { specialize ih1 H13,
-    rcases ih1 with ⟨L₄, H24, H34⟩,
-    revert H24,
-    generalize HL23 : L2 ++ (x1, b1) :: (x1, bnot b1) :: L3 = L23,
-    intro H24,
-    suffices : ∃ L₅, red (L2 ++ L3) L₅ ∧ red L₄ L₅,
-    { rcases this with ⟨L₅, H25, H45⟩,
-      exact ⟨L₅, H25, red.trans H34 H45⟩ },
-    clear H13 H1 L1 L₁ L₂ H34 L₃,
-    induction H24 with L4 L4 L5 L6 x2 b2 H2 ih2,
-    case red.refl
-    { subst HL23,
-      exact ⟨L2 ++ L3, red.refl, red.trans_bnot red.refl⟩ },
-    case red.trans_bnot
-    { specialize ih2 HL23,
-      rcases ih2 with ⟨L₅, H25, H45⟩,
-      have := church_rosser_1 H45,
-      rcases this with H3 | ⟨L₆, L₇, x3, b3, H4, H5⟩,
-      { exact ⟨_, H25, H3⟩ },
-      { subst H4,
-        exact ⟨_, red.trans_bnot H25, H5⟩ } } }
-end
+theorem church_rosser : ∀ {L₁ L₂ L₃ : list (α × bool)},
+  red L₁ L₂ → red L₁ L₃ → ∃ L₄, red L₂ L₄ ∧ red L₃ L₄
+| _ _ _ red.refl H23 := ⟨_, H23, red.refl⟩
+| _ _ _ (red.step_trans H1 H2) H23 :=
+  have _ := red.sizeof H1,
+  match church_rosser_1 H1 H23 with
+    | or.inl H3 := church_rosser H2 H3
+    | or.inr ⟨L7, H3, H4⟩ :=
+        let ⟨L8, H5, H6⟩ := church_rosser H2 H3 in
+        ⟨L8, H5, red.step_trans H4 H6⟩
+  end
 
 variable α
 
@@ -269,27 +174,23 @@ namespace free_group
 
 variables {α} {L L₁ L₂ L₃ L₄ : list (α × bool)}
 
-theorem red.append (H13 : red L₁ L₃) (H24 : red L₂ L₄) : red (L₁ ++ L₂) (L₃ ++ L₄) :=
-begin
-  induction H13 with L1 L1 L2 L3 x1 b1 H1 ih1 generalizing L₂ L₄,
-  case red.refl
-  { induction H24 with L4 L4 L5 L6 x2 b2 H2 ih2,
-    case red.refl
-    { exact red.refl },
-    case red.trans_bnot
-    { rw ← list.append_assoc at ih2 ⊢,
-      exact red.trans_bnot ih2 } },
-  case red.trans_bnot
-  { induction H24 with L4 L4 L5 L6 x2 b2 H2 ih2,
-    case red.refl
-    { specialize @ih1 L4 L4 red.refl,
-      rw list.append_assoc at ih1 ⊢,
-      rw [list.cons_append, list.cons_append] at ih1,
-      exact red.trans_bnot ih1 },
-    case red.trans_bnot
-    { rw ← list.append_assoc at ih2 ⊢,
-      exact red.trans_bnot ih2 } }
-end
+theorem red.step.append_left : ∀ {L₁ L₂ L₃ : list (α × bool)},
+  red.step L₂ L₃ → red.step (L₁ ++ L₂) (L₁ ++ L₃)
+| _ _ _ red.step.bnot := by rw [← list.append_assoc, ← list.append_assoc]; constructor
+
+theorem red.step.append_right : ∀ {L₁ L₂ L₃ : list (α × bool)},
+  red.step L₁ L₂ → red.step (L₁ ++ L₃) (L₂ ++ L₃)
+| _ _ _ red.step.bnot := by rw [list.append_assoc, list.append_assoc]; constructor
+
+theorem red.append : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)},
+  red L₁ L₃ → red L₂ L₄ → red (L₁ ++ L₂) (L₃ ++ L₄)
+| _ _ _ _ red.refl red.refl := red.refl
+| _ _ _ _ red.refl (red.step_trans H3 H4) :=
+    have _ := red.sizeof H3,
+    red.step_trans (red.step.append_left H3) (red.append red.refl H4)
+| _ _ _ _ (red.step_trans H1 H2) H3 :=
+    have _ := red.sizeof H1,
+    red.step_trans (red.step.append_right H1) (red.append H2 H3)
 
 theorem red.cons (H : red L₁ L₂) {x} : red (x :: L₁) (x :: L₂) :=
 red.append (@red.refl _ [x]) H
@@ -307,26 +208,15 @@ have H1 : (λ (x : α × bool), (x.fst, bnot (x.snd))) ∘ (λ (x : α × bool),
 by simp [inv, H1]
 
 theorem red.inv (H : red L₁ L₂) : red (inv L₁) (inv L₂) :=
-begin
-  induction H with L L1 L2 L3 x b H ih,
-  case red.refl
-  { exact red.refl },
-  case red.trans_bnot
-  { simp [inv] at ih ⊢,
-    exact red.trans_bnot ih }
-end
+red.rec_on H (λ _, red.refl) $ λ _ _ _ H1 H2 ih,
+red.step_trans (by cases H1; simp [inv]; constructor) ih
+
+theorem red.step.bnot_rev {x b} : red.step (L₁ ++ (x, bnot b) :: (x, b) :: L₂) (L₁ ++ L₂) :=
+by simpa using @red.step.bnot _ L₁ L₂ x (bnot b)
 
 theorem red.reverse (H : red L₁ L₂) : red L₁.reverse L₂.reverse :=
-begin
-  induction H with L L1 L2 L3 x b H ih,
-  case red.refl
-  { exact red.refl },
-  case red.trans_bnot
-  { simp at ih ⊢,
-    have ih2 : red (list.reverse L1) (list.reverse L3 ++ (x, bnot b) :: (x, bnot (bnot b)) :: list.reverse L2),
-    { simpa using ih },
-    exact red.trans_bnot ih2 }
-end
+red.rec_on H (λ _, red.refl) $ λ _ _ _ H1 H2 ih,
+red.step_trans (by cases H1; simpa using red.step.bnot_rev) ih
 
 theorem rel.inv : L₁ ≈ L₂ → inv L₁ ≈ inv L₂ :=
 λ ⟨L₃, H13, H23⟩, ⟨inv L₃, red.inv H13, red.inv H23⟩
@@ -338,9 +228,6 @@ theorem red.inv_append : ∀ {L : list (α × bool)}, red (inv L ++ L) []
   have H2 : inv t ++ (x, bnot b) :: (x, bnot (bnot b)) :: t = inv ((x, b) :: t) ++ (x, b) :: t,
     by simp [inv],
   H2 ▸ red.trans (red.bnot) H1
-
-theorem rel.inv_append : inv L ++ L ≈ [] :=
-⟨[], red.inv_append, red.refl⟩
 
 instance : group (free_group α) :=
 { mul := quotient.lift₂ (λ L₁ L₂, ⟦L₁ ++ L₂⟧) $
@@ -355,52 +242,36 @@ instance : group (free_group α) :=
   inv := quotient.lift (λ L, ⟦inv L⟧) $
     λ _ _ H, quotient.sound $ rel.inv H,
   mul_left_inv := λ x, quotient.induction_on x $
-    λ _, quotient.sound $ rel.inv_append }
+    λ _, quotient.sound $ ⟨[], red.inv_append, red.refl⟩ }
 
 @[simp] lemma mul_mk : (⟦L₁⟧ * ⟦L₂⟧ : free_group α) = ⟦L₁ ++ L₂⟧ := rfl
 
 def of (x : α) : free_group α :=
 ⟦[(x, tt)]⟧
 
-theorem red.nil : red [] L₁ → [] = L₁ :=
-begin
-  generalize HX : [] = X,
-  intro H,
-  induction H with L L1 L2 L3 x b H ih,
-  case red.refl
-  { refl },
-  case red.trans_bnot
-  { specialize ih HX,
-    subst HX,
-    replace ih := congr_arg list.length ih,
-    rw list.length_append at ih,
-    exact nat.no_confusion ih }
-end
+theorem red.nil.aux : ∀ {L₁ L₂ : list (α × bool)},
+  red L₁ L₂ → L₁ = [] → [] = L₂
+| _ _ red.refl                                        H := H.symm
+| _ _ (red.step_trans (@red.step.bnot _ [] _ _ _) H2) H := list.no_confusion H
 
-theorem red.singleton {xb} : red [xb] L₁ → [xb] = L₁ :=
-begin
-  generalize HX : [xb] = X,
-  intro H,
-  induction H with L L1 L2 L3 x b H ih,
-  case red.refl
-  { refl },
-  case red.trans_bnot
-  { specialize ih HX,
-    subst HX,
-    replace ih := congr_arg list.length ih,
-    rw list.length_append at ih,
-    exact nat.no_confusion (nat.succ_inj ih) }
-end
+theorem red.nil (H : red [] L) : [] = L :=
+red.nil.aux H rfl
+
+theorem red.singleton.aux : ∀ {L₁ L₂ : list (α × bool)} {x},
+  red L₁ L₂ → L₁ = [x] → [x] = L₂
+| _ _ _ red.refl                                         H := H.symm
+| _ _ _ (red.step_trans (@red.step.bnot _ [] _ _ _) H2)  H :=
+  list.no_confusion (list.cons.inj H).2
+| _ _ _ (red.step_trans (@red.step.bnot _ [x] _ _ _) H2) H :=
+  list.no_confusion (list.cons.inj H).2
+
+theorem red.singleton {x} (H : red [x] L₁) : [x] = L₁ :=
+red.singleton.aux H rfl
 
 theorem of.inj {x y : α} (H : of x = of y) : x = y :=
-begin
-  replace H := quotient.exact H,
-  rcases H with ⟨L₁, hx, hy⟩,
-  replace hx := red.singleton hx,
-  replace hy := red.singleton hy,
-  subst hy,
-  simpa using hx,
-end
+let ⟨L₁, hx, hy⟩ := quotient.exact H in
+have H1 : _ := (red.singleton hx).trans (red.singleton hy).symm,
+by injections
 
 section to_group
 
@@ -410,14 +281,8 @@ def to_group.aux : list (α × bool) → β :=
 λ L, list.prod $ L.map $ λ x, cond x.2 (f x.1) (f x.1)⁻¹
 
 def red.to_group {f : α → β} (H : red L₁ L₂) : to_group.aux f L₁ = to_group.aux f L₂ :=
-begin
-  induction H with L L1 L2 L3 x b H ih,
-  case red.refl
-  { refl },
-  case red.trans_bnot
-  { rw ih,
-    cases b; simp [to_group.aux] }
-end
+red.rec_on H (λ _, rfl) $ λ _ _ _ H1 H2 ih,
+eq.trans (by cases H1 with _ _ _ b; cases b; simp [to_group.aux]) ih
 
 def to_group : free_group α → β :=
 quotient.lift (to_group.aux f) $ λ L₁ L₂ ⟨L₃, H13, H23⟩,
@@ -467,14 +332,8 @@ def map.aux (L : list (α × bool)) : list (β × bool) :=
 L.map $ λ x, (f x.1, x.2)
 
 theorem red.map (H : red L₁ L₂) : red (map.aux f L₁) (map.aux f L₂) :=
-begin
-  induction H with L L1 L2 L3 x b H ih,
-  case red.refl
-  { exact red.refl },
-  case red.trans_bnot
-  { simp [map.aux] at ih ⊢,
-    exact red.trans_bnot ih }
-end
+red.rec_on H (λ _, red.refl) $ λ _ _ _ H1 H2 ih,
+red.step_trans (by cases H1; simp [map.aux]; constructor) ih
 
 theorem rel.map {f : α → β} : L₁ ≈ L₂ → map.aux f L₁ ≈ map.aux f L₂ :=
 λ ⟨L₃, H13, H23⟩, ⟨map.aux f L₃, red.map f H13, red.map f H23⟩
@@ -600,7 +459,7 @@ def free_group_empty_equiv_unit : free_group empty ≃ unit :=
   left_inv  := λ x, quotient.induction_on x $ λ L, match L with [] := rfl end,
   right_inv := λ ⟨⟩, rfl }
 
-def free_group_unit_equiv_unit : free_group unit ≃ int :=
+def free_group_unit_equiv_int : free_group unit ≃ int :=
 { to_fun    := λ x, sum $ map (λ _, 1) x,
   inv_fun   := λ x, of () ^ x,
   left_inv  := λ x, quotient.induction_on x $ λ L,
@@ -667,10 +526,7 @@ section reduce
 variable [decidable_eq α]
 
 def reduce.step : list (α × bool) → (α × bool) → list (α × bool)
-| ((x1,tt)::tl) (x2,tt) := (x2,tt)::(x1,tt)::tl
-| ((x1,tt)::tl) (x2,ff) := if x1 = x2 then tl else (x2,ff)::(x1,tt)::tl
-| ((x1,ff)::tl) (x2,tt) := if x1 = x2 then tl else (x2,tt)::(x1,ff)::tl
-| ((x1,ff)::tl) (x2,ff) := (x2,ff)::(x1,ff)::tl
+| (hd::tl) x := if hd.1 = x.1 ∧ hd.2 = bnot x.2 then tl else x::hd::tl
 | [] x := [x]
 
 def reduce.core : list (α × bool) → list (α × bool) → list (α × bool)
@@ -680,104 +536,53 @@ def reduce.core : list (α × bool) → list (α × bool) → list (α × bool)
 def reduce (L : list (α × bool)) : list (α × bool) :=
 reduce.core [] L.reverse
 
-theorem reduce.step.red : ∀ {L : list (α × bool)} {x b}, red ((x,b)::L) (reduce.step L (x,b))
-| []            _  _  := red.refl
-| ((x1,tt)::tl) x2 tt := red.refl
-| ((x1,tt)::tl) x2 ff := if H : x1 = x2
-    then by simp [reduce.step, H]; from red.cons_bnot
-    else by simp [reduce.step, H]; from red.refl
-| ((x1,ff)::tl) x2 tt := if H : x1 = x2
-    then by simp [reduce.step, H]; from red.cons_bnot
-    else by simp [reduce.step, H]; from red.refl
-| ((x1,ff)::tl) x2 ff := red.refl
+theorem reduce.step.red : ∀ {L : list (α × bool)} {x},
+  red (x::L) (reduce.step L x)
+| []            _       := red.refl
+| ((x1,b1)::tl) (x2,b2) := if H : x1 = x2 ∧ b1 = bnot b2
+  then by simp [reduce.step, H]; from red.cons_bnot
+  else by simp [reduce.step, H]
 
-theorem reduce.core.red : ∀ {L₁ L₂ : list (α × bool)}, red (L₂.reverse ++ L₁) (reduce.core L₁ L₂)
-| L []          := by simp [reduce.core]; from red.refl
-| L ((x,b)::tl) := 
-  begin
-    simp [reduce.core],
-    transitivity,
-    { exact red.append red.refl reduce.step.red },
-    { exact reduce.core.red }
-  end
+theorem reduce.core.red : ∀ {L₁}, red (L₂.reverse ++ L₁) (reduce.core L₁ L₂) :=
+list.rec_on L₂ (λ _, red.refl) $ λ hd tl ih L₁, by simp [reduce.core];
+from red.trans (red.append red.refl reduce.step.red) ih
 
 theorem reduce.red : red L (reduce L) :=
-by simpa using @reduce.core.red _ _ [] L.reverse
+by simpa using @reduce.core.red _ L.reverse _ []
 
-theorem reduce.step.not : ∀ {L₁ : list (α × bool)} {x1 b1 x2 b2},
-  (x2, b2) :: (x2, bnot b2) :: L <:+ reduce.step L₁ (x1, b1) → (x2, b2) :: (x2, bnot b2) :: L <:+ L₁
-| [] _ _ _ _ ⟨[], H⟩   := list.no_confusion (list.cons.inj H).2
-| [] _ _ _ _ ⟨[hd], H⟩ := list.no_confusion (list.cons.inj H).2
-| ((x,tt)::tl) _ tt _ _ ⟨[], H⟩ := by simp [reduce.step] at H;
-    rcases H with ⟨⟨_, _⟩, ⟨_, _⟩, _⟩; subst_vars;
-    from bool.no_confusion H_right_left_right
-| ((x,tt)::tl) _ tt _ _ ⟨(x2,b)::tl2, H⟩ := ⟨tl2, (list.cons.inj H).2⟩
-| ((x,ff)::tl) _ ff _ _ ⟨[], H⟩ := by simp [reduce.step] at H;
-    rcases H with ⟨⟨_, _⟩, ⟨_, _⟩, _⟩; subst_vars;
-    from bool.no_confusion H_right_left_right
-| ((x,ff)::tl) _ ff _ _ ⟨(x2,b)::tl2, H⟩ := ⟨tl2, (list.cons.inj H).2⟩
-| ((x,tt)::tl) x2 ff _ _ ⟨[], H⟩ := if h : x = x2
-    then by simp [reduce.step, h] at H; subst H; from list.suffix_cons _ _
-    else by simp [reduce.step, h] at H;
-      rcases H with ⟨⟨_, _⟩, ⟨_, _⟩, _⟩; subst_vars;
-      exfalso; apply h; refl
-| ((x,tt)::tl) x2 ff _ _ ⟨(x3,b)::tl2, H⟩ := if h : x = x2
-    then by simp [reduce.step, h] at H; subst H;
-      existsi (x, tt) :: (x3, b) :: tl2; refl
-    else by simp [reduce.step, h] at H; rw ← H.2;
-      from list.suffix_append _ _
-| ((x,ff)::tl) x2 tt _ _ ⟨[], H⟩ := if h : x = x2
-    then by simp [reduce.step, h] at H; subst H; from list.suffix_cons _ _
-    else by simp [reduce.step, h] at H;
-      rcases H with ⟨⟨_, _⟩, ⟨_, _⟩, _⟩; subst_vars;
-      exfalso; apply h; refl
-| ((x,ff)::tl) x2 tt _ _ ⟨(x3,b)::tl2, H⟩ := if h : x = x2
-    then by simp [reduce.step, h] at H; subst H;
-      existsi (x, ff) :: (x3, b) :: tl2; refl
-    else by simp [reduce.step, h] at H; rw ← H.2;
-      from list.suffix_append _ _
+theorem reduce.step.not : ∀ {L₂ : list (α × bool)} {x1 b1 x2 b2},
+  (x2, b2) :: (x2, bnot b2) :: L₁ <:+ reduce.step L₂ (x1, b1) →
+  (x2, b2) :: (x2, bnot b2) :: L₁ <:+ L₂
+| []            _  _  _ _ ⟨L, H⟩            :=
+  by cases L with _ tl; injections; cases tl; injections
+| ((x3,b3)::tl) x1 b1 _ _ ⟨[], H⟩           := if h : x3 = x1 ∧ b3 = bnot b1
+  then by simp [reduce.step, h] at H; subst H; from list.suffix_cons _ _
+  else by simp [reduce.step, h] at H; cases_matching* _ ∧ _; cc
+| ((x3,b3)::tl) x1 b1 _ _ ⟨(x4,b4)::tl2, H⟩ := if h : x3 = x1 ∧ b3 = bnot b1
+  then by simp [reduce.step, h] at H; subst H;
+    rw [← list.cons_append, ← list.cons_append]; from list.suffix_append _ _
+  else by simp [reduce.step, h] at H; rw ← H.2; from list.suffix_append _ _
 
-theorem reduce.core.not {x b} (H : (x, b) :: (x, bnot b) :: L <:+ reduce.core L₁ L₂) : (x, b) :: (x, bnot b) :: L <:+ L₁ :=
-begin
-  induction L₂ with hd tl ih generalizing L₁,
-  case list.nil
-  { from H },
-  case list.cons
-  { dsimp [reduce.core] at H,
-    cases hd,
-    specialize ih H,
-    from reduce.step.not ih }
-end
+theorem reduce.core.not {x b} : ∀ {L₁},
+  (x, b) :: (x, bnot b) :: L <:+ reduce.core L₁ L₂ →
+  (x, b) :: (x, bnot b) :: L <:+ L₁ :=
+list.rec_on L₂ (λ _, id) $
+λ ⟨x, b⟩ tl ih L₁ H, reduce.step.not (ih H)
 
-theorem reduce.not {x b} (H : [(x, b), (x, bnot b)] <:+: reduce L) : false :=
-let ⟨L₁, L₂, H1⟩ := H in
-have H2 : L₁ ++ (x, b) :: (x, bnot b) :: L₂ = reduce L,
-  by simpa using H1,
-list.no_confusion $ list.eq_nil_of_suffix_nil $ reduce.core.not ⟨L₁, H2⟩
+theorem reduce.min.aux (H : red L₁ L₃) : L₁ = reduce L₂ → reduce L₂ = L₃ :=
+red.rec_on H (λ _, eq.symm) $ λ _ _ _ H1 H2 ih H3,
+by cases H1 with _ L x b; subst_vars;
+  cases reduce.core.not ⟨_, H3⟩ with L1;
+  cases L1; injections
 
-theorem reduce.min : red (reduce L₁) L₂ → reduce L₁ = L₂ :=
-begin
-  generalize HRL : reduce L₁ = RL,
-  intro H,
-  induction H with L1 L1 L2 L3 x b H ih,
-  case red.refl
-  { refl },
-  case red.trans_bnot
-  { specialize ih HRL,
-    subst HRL,
-    exfalso,
-    have H1 : [(x, b), (x, bnot b)] <:+: reduce L₁,
-    { rw ih,
-      existsi [L2, L3],
-      simp },
-    from reduce.not H1 }
-end
+theorem reduce.min (H : red (reduce L₁) L₂) : reduce L₁ = L₂ :=
+reduce.min.aux H rfl
 
 theorem reduce.idem : reduce (reduce L) = reduce L :=
 eq.symm $ reduce.min reduce.red
 
 theorem reduce.eq_of_red (H : red L₁ L₂) : reduce L₁ = reduce L₂ :=
-let ⟨L₃, HR13, HR23⟩ := church_rosser reduce.red(red.trans H reduce.red) in
+let ⟨L₃, HR13, HR23⟩ := church_rosser reduce.red (red.trans H reduce.red) in
 (reduce.min HR13).trans (reduce.min HR23).symm
 
 theorem reduce.rel : L₁ ≈ L₂ → reduce L₁ = reduce L₂ :=
