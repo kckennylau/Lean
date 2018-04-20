@@ -12,11 +12,9 @@ universes u v w
 
 variables {α : Type u}
 
-namespace list
+lemma list.append_eq_has_append {L₁ L₂ : list α} : list.append L₁ L₂ = L₁ ++ L₂ := rfl
 
-@[simp] lemma append_eq_has_append {L₁ L₂ : list α} : list.append L₁ L₂ = L₁ ++ L₂ := rfl
-
-end list
+local attribute [simp] list.append_eq_has_append
 
 namespace is_group_hom
 
@@ -85,58 +83,43 @@ red.step_trans H1 $ ih H23
 @[trans] theorem red.trans (H12 : red L₁ L₂) (H23 : red L₂ L₃) : red L₁ L₃ :=
 red.trans.aux H12 H23
 
-theorem red.step.church_rosser.aux2 : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)} {x1 b1 x2 b2},
+theorem red.step.church_rosser.aux : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)} {x1 b1 x2 b2},
   L₁ ++ (x1, b1) :: (x1, bnot b1) :: L₂ = L₃ ++ (x2, b2) :: (x2, bnot b2) :: L₄ →
   L₁ ++ L₂ = L₃ ++ L₄ ∨ ∃ L₅, red.step (L₁ ++ L₂) L₅ ∧ red.step (L₃ ++ L₄) L₅
 | []        _ []        _ _ _ _ _ H := by injections; subst_vars; simp
 | []        _ [(x3,b3)] _ _ _ _ _ H := by injections; subst_vars; simp
 | [(x3,b3)] _ []        _ _ _ _ _ H := by injections; subst_vars; simp
 | []                     _ ((x3,b3)::(x4,b4)::tl) _ _ _ _ _ H :=
-  by injections; subst_vars; simp; right; exact ⟨_, red.step.bnot, red.step.cons_bnot⟩
+  by injections; subst_vars; simp;
+  from or.inr ⟨_, red.step.bnot, red.step.cons_bnot⟩
 | ((x3,b3)::(x4,b4)::tl) _ []                     _ _ _ _ _ H :=
-  by injections; subst_vars; simp; right; exact ⟨_, red.step.cons_bnot, red.step.bnot⟩
+  by injections; subst_vars; simp;
+  from or.inr ⟨_, red.step.cons_bnot, red.step.bnot⟩
 | ((x3,b3)::tl) _ ((x4,b4)::tl2) _ _ _ _ _ H :=
   let ⟨H1, H2⟩ := list.cons.inj H in
-  match red.step.church_rosser.aux2 H2 with
+  match red.step.church_rosser.aux H2 with
     | or.inl H3 := or.inl $ by simp [H1, H3]
     | or.inr ⟨L₅, H3, H4⟩ := or.inr
       ⟨_, red.step.cons H3, by simpa [H1] using red.step.cons H4⟩
   end
 
-theorem red.step.church_rosser.aux : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)},
-  red.step L₁ L₃ → red.step L₂ L₄ → L₁ = L₂ →
-  L₃ = L₄ ∨ ∃ L₅, red.step L₃ L₅ ∧ red.step L₄ L₅
-| _ _ _ _ red.step.bnot red.step.bnot H := red.step.church_rosser.aux2 H
+theorem red.step.church_rosser (H : L₁ = L₂)
+  (H13 : red.step L₁ L₃) (H24 : red.step L₂ L₄) :
+  L₃ = L₄ ∨ ∃ L₅, red.step L₃ L₅ ∧ red.step L₄ L₅ :=
+by cases H13; cases H24; from red.step.church_rosser.aux H
 
-theorem red.step.church_rosser (H12 : red.step L₁ L₂) (H13 : red.step L₁ L₃) :
-  L₂ = L₃ ∨ ∃ L₄, red.step L₂ L₄ ∧ red.step L₃ L₄ :=
-red.step.church_rosser.aux H12 H13 rfl
+theorem church_rosser_1 (H12 : red L₁ L₂) :
+  ∀ {L₃}, step L₁ L₃ → red L₃ L₂ ∨ ∃ L₄, step L₂ L₄ ∧ red L₃ L₄ :=
+red.rec_on H12 (λ _ _ H3, or.inr ⟨_, H3, red.refl⟩) $ λ _ _ _ H1 H2 ih _ H13,
+or.cases_on (red.step.church_rosser rfl H13 H1) (λ H3, or.inl $ H3.symm ▸ H2) $
+λ ⟨L1, H3, H4⟩, or.cases_on (ih H4) (λ H5, or.inl $ red.step_trans H3 H5) $
+λ ⟨L2, H5, H6⟩, or.inr ⟨_, H5, red.step_trans H3 H6⟩
 
-theorem church_rosser_1 : ∀ {L₁ L₂ L₃ : list (α × bool)},
-  red.step L₁ L₂ → red L₁ L₃ →
-  red L₂ L₃ ∨ ∃ L₄, red L₂ L₄ ∧ step L₃ L₄
-| _ _ _ H12 red.refl := or.inr ⟨_, red.refl, H12⟩
-| _ _ _ H12 (red.step_trans H1 H2) :=
-  have _ := red.sizeof H1,
-  match red.step.church_rosser H12 H1 with
-    | or.inl H3 := or.inl $ H3.symm ▸ H2
-    | or.inr ⟨L1, H3, H4⟩ := match church_rosser_1 H4 H2 with
-      | or.inl H5 := or.inl $ red.step_trans H3 H5
-      | or.inr ⟨L2, H5, H6⟩ := or.inr $ ⟨L2, red.step_trans H3 H5, H6⟩
-      end
-  end
-
-theorem church_rosser : ∀ {L₁ L₂ L₃ : list (α × bool)},
-  red L₁ L₂ → red L₁ L₃ → ∃ L₄, red L₂ L₄ ∧ red L₃ L₄
-| _ _ _ red.refl H23 := ⟨_, H23, red.refl⟩
-| _ _ _ (red.step_trans H1 H2) H23 :=
-  have _ := red.sizeof H1,
-  match church_rosser_1 H1 H23 with
-    | or.inl H3 := church_rosser H2 H3
-    | or.inr ⟨L7, H3, H4⟩ :=
-        let ⟨L8, H5, H6⟩ := church_rosser H2 H3 in
-        ⟨L8, H5, red.step_trans H4 H6⟩
-  end
+theorem church_rosser (H12 : red L₁ L₂) :
+  ∀ {L₃}, red L₁ L₃ → ∃ L₄, red L₂ L₄ ∧ red L₃ L₄ :=
+red.rec_on H12 (λ L L₃ H3, ⟨_, H3, red.refl⟩) $ λ L1 L2 L3 H1 H2 ih L₃ H13,
+or.cases_on (church_rosser_1 H13 H1) (λ H23, ih H23) $ λ ⟨L7, H3, H4⟩,
+let ⟨L8, H5, H6⟩ := ih H4 in ⟨L8, H5, red.step_trans H3 H6⟩
 
 variable α
 
@@ -162,11 +145,9 @@ variables {α} {L L₁ L₂ L₃ L₄ : list (α × bool)}
 theorem red.append : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)},
   red L₁ L₃ → red L₂ L₄ → red (L₁ ++ L₂) (L₃ ++ L₄)
 | _ _ _ _ red.refl red.refl := red.refl
-| _ _ _ _ red.refl (red.step_trans H3 H4) :=
-  have _ := red.sizeof H3,
+| _ _ _ _ red.refl (red.step_trans H3 H4) := have _ := red.sizeof H3,
   red.step_trans (red.step.append_left H3) (red.append red.refl H4)
-| _ _ _ _ (red.step_trans H1 H2) H3 :=
-  have _ := red.sizeof H1,
+| _ _ _ _ (red.step_trans H1 H2) H3 := have _ := red.sizeof H1,
   red.step_trans (red.step.append_right H1) (red.append H2 H3)
 
 theorem red.cons (H : red L₁ L₂) {x} : red (x :: L₁) (x :: L₂) :=
