@@ -12,6 +12,16 @@ universes u v w
 
 variables {α : Type u}
 
+@[elab_as_eliminator] def revert
+  {α : Sort*} {β : α → Sort*} (x : α) :
+  (Π x, β x) → β x :=
+λ H, H x
+
+@[elab_as_eliminator] def generalize
+  {α : Sort*} {β : α → Sort*} (x : α) :
+  (Π z, x = z → β z) → β x :=
+λ H, H x rfl
+
 lemma list.append_eq_has_append {L₁ L₂ : list α} : list.append L₁ L₂ = L₁ ++ L₂ := rfl
 
 lemma list.infix_cons {L₁ L₂ : list α} {x : α} : L₁ <:+: L₂ → L₁ <:+: x :: L₂ :=
@@ -31,9 +41,13 @@ end is_group_hom
 
 namespace free_group
 
+/-- Predicate asserting that word `w₁` can be reduced
+to `w₂` in one step, i.e. there are words `w₃ w₄`
+and letter `x` such that `w₁ = w₃xx⁻¹w₄` and `w₂ = w₃w₄`  -/
 inductive red.step : list (α × bool) → list (α × bool) → Prop
 | bnot {L₁ L₂ x b} : red.step (L₁ ++ (x, b) :: (x, bnot b) :: L₂) (L₁ ++ L₂)
 
+/-- Reflexive-transitive closure of red.step -/
 inductive red : list (α × bool) → list (α × bool) → Prop
 | refl {L} : red L L
 | step_trans {L₁ L₂ L₃} (H : free_group.red.step L₁ L₂) :
@@ -44,12 +58,10 @@ attribute [refl] red.refl
 
 variables {L L₁ L₂ L₃ L₄ : list (α × bool)}
 
-theorem red.trans.aux (H12 : red L₁ L₂) : ∀ {L₃}, red L₂ L₃ → red L₁ L₃ :=
-red.rec_on H12 (λ _ _, id) $ λ _ _ _ H1 H2 ih L₃ H23,
-red.step_trans H1 $ ih H23
-
 @[trans] theorem red.trans (H12 : red L₁ L₂) (H23 : red L₂ L₃) : red L₁ L₃ :=
-red.trans.aux H12 H23
+revert H23 $ revert L₃ $
+red.rec_on H12 (λ _ _, id) $ λ _ _ _ H1 H2 ih L₃ H23,
+red.step_trans H1 $ ih _ H23
 
 @[simp] lemma red.step.bnot_rev {x b} : red.step (L₁ ++ (x, bnot b) :: (x, b) :: L₂) (L₁ ++ L₂) :=
 by cases b; from step.bnot
@@ -153,7 +165,7 @@ have H4 : list.length L2 + 0 = list.length L2 + (2 * n + 2),
   by simpa using H3,
 nat.no_confusion $ nat.add_left_cancel H4
 
-theorem red.step.church_rosser.aux2 : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)} {x1 b1 x2 b2},
+theorem red.step.church_rosser.aux : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)} {x1 b1 x2 b2},
   L₁ ++ (x1, b1) :: (x1, bnot b1) :: L₂ = L₃ ++ (x2, b2) :: (x2, bnot b2) :: L₄ →
   L₁ ++ L₂ = L₃ ++ L₄ ∨ ∃ L₅, red.step (L₁ ++ L₂) L₅ ∧ red.step (L₃ ++ L₄) L₅
 | []        _ []        _ _ _ _ _ H := by injections; subst_vars; simp
@@ -165,20 +177,18 @@ theorem red.step.church_rosser.aux2 : ∀ {L₁ L₂ L₃ L₄ : list (α × boo
   by injections; subst_vars; simp; right; exact ⟨_, red.step.cons_bnot, red.step.bnot⟩
 | ((x3,b3)::tl) _ ((x4,b4)::tl2) _ _ _ _ _ H :=
   let ⟨H1, H2⟩ := list.cons.inj H in
-  match red.step.church_rosser.aux2 H2 with
+  match red.step.church_rosser.aux H2 with
     | or.inl H3 := or.inl $ by simp [H1, H3]
     | or.inr ⟨L₅, H3, H4⟩ := or.inr
       ⟨_, red.step.cons H3, by simpa [H1] using red.step.cons H4⟩
   end
 
-theorem red.step.church_rosser.aux : ∀ {L₁ L₂ L₃ L₄ : list (α × bool)},
-  red.step L₁ L₃ → red.step L₂ L₄ → L₁ = L₂ →
-  L₃ = L₄ ∨ ∃ L₅, red.step L₃ L₅ ∧ red.step L₄ L₅
-| _ _ _ _ red.step.bnot red.step.bnot H := red.step.church_rosser.aux2 H
-
 theorem red.step.church_rosser (H12 : red.step L₁ L₂) (H13 : red.step L₁ L₃) :
   L₂ = L₃ ∨ ∃ L₄, red.step L₂ L₄ ∧ red.step L₃ L₄ :=
-red.step.church_rosser.aux H12 H13 rfl
+revert H13 $ red.step.rec_on H12 $ λ L4 L5 x1 b1,
+generalize (L4 ++ (x1, b1) :: (x1, bnot b1) :: L5) $ λ L6 H6 H63,
+revert H6 $ red.step.rec_on H63 $ λ L7 L8 x2 b2 H6,
+red.step.church_rosser.aux H6
 
 theorem church_rosser_1 : ∀ {L₁ L₂ L₃ : list (α × bool)},
   red.step L₁ L₂ → red L₁ L₃ →
@@ -279,13 +289,11 @@ quot.eqv_gen_sound $ eqv_gen.trans _ _ _
   (red.step.eqv_gen_of_red H13)
   (eqv_gen.symm _ _ $ red.step.eqv_gen_of_red H23)
 
-theorem red.nil.aux : ∀ {L₁ L₂ : list (α × bool)},
-  red L₁ L₂ → L₁ = [] → [] = L₂
-| _ _ red.refl                                        H := H.symm
-| _ _ (red.step_trans (@red.step.bnot _ [] _ _ _) H2) H := list.no_confusion H
-
-theorem red.nil (H : red [] L) : [] = L :=
-red.nil.aux H rfl
+theorem red.nil : red [] L → [] = L :=
+generalize ([] : list (α × bool)) $ λ LN HN H,
+revert HN $ red.rec_on H (λ _ _, rfl) $ λ L1 L2 L3 H12,
+red.step.rec_on H12 $ λ L4 L5 x b H23 ih H,
+list.no_confusion $ ((list.append_eq_nil _ _).1 H.symm).2
 
 theorem red.singleton.aux : ∀ {L₁ L₂ : list (α × bool)} {x},
   red L₁ L₂ → L₁ = [x] → [x] = L₂
@@ -310,18 +318,17 @@ theorem red.sublist (H : red L₁ L₂) : L₂ <+ L₁ :=
 red.rec_on H list.sublist.refl $ λ _ _ _ H1 H2 ih,
 list.sublist.trans ih $ red.step.sublist H1
 
-theorem red.inv_of_red_nil.aux {x b} (H : red L₁ L₂) :
-  ∀ {L}, L₁ = ((x, b) :: L) → L₂ = [] → red L [(x, bnot b)] :=
-red.rec_on H (by cc) $ λ L3 L4 L5 H34,
+theorem red.inv_of_red_nil {x b} :
+  red ((x, b) :: L) [] → red L [(x, bnot b)] :=
+generalize ((x, b) :: L : list (α × bool)) $ λ L₁ H1,
+generalize ([] : list (α × bool)) $ λ L₂ H2 H12,
+revert H2 $ revert H1 $ revert L $
+red.rec_on H12 (by cc) $ λ L3 L4 L5 H34,
 red.step.cases_on H34 $ λ L6 L7 x1 b1,
 list.cases_on L6
   (λ H45 ih L H7 H5, by injections; subst_vars; simpa)
   (λ ⟨x2, b2⟩ tl H45 ih L H7 H5, by injections; subst_vars;
-     from red.step_trans red.step.bnot (ih rfl H5))
-
-theorem red.inv_of_red_nil {x b} (H : red ((x, b) :: L) []) :
-  red L [(x, bnot b)] :=
-red.inv_of_red_nil.aux H rfl rfl
+     from red.step_trans red.step.bnot (ih _ rfl H5))
 
 theorem red.inv_of_red_of_ne.aux {x1 b1 x2 b2} 
   (H1 : (x1, b1) ≠ (x2, b2)) (H2 : red L₁ L₂) :
@@ -617,18 +624,11 @@ theorem reduce.not {p : Prop} : ∀ {L₁ L₂ L₃ : list (α × bool)} {x b}, 
     rw [r, H], refl }
 end
 
-theorem reduce.min (H : red (reduce L₁) L₂) : reduce L₁ = L₂ :=
-begin
-  revert H,
-  generalize h1 : reduce L₁ = L,
-  intro H,
-  induction H with L1 L1 L2 L3 H1 H2 ih,
-  case red.refl
-  { refl },
-  case red.step_trans
-  { cases H1 with L4 L5 x b,
-    exact reduce.not h1 }
-end
+theorem reduce.min : red (reduce L₁) L₂ → reduce L₁ = L₂ :=
+generalize (reduce L₁) $ λ L h1 H,
+revert h1 $ red.rec_on H (λ _ _, rfl) $ λ L3 L4 L5 H34 H45 ih,
+red.step.rec_on H34 $ λ L6 L7 x b h1,
+reduce.not h1
 
 theorem reduce.idem : reduce (reduce L) = reduce L :=
 eq.symm $ reduce.min reduce.red
@@ -677,10 +677,7 @@ instance red.decidable_rel : decidable_rel (@red α)
 | ((x,b)::tl) [] := match red.decidable_rel tl [(x, bnot b)] with
   | is_true H  := is_true $ red.trans (red.cons H) $
     red.of_step $ @red.step.bnot _ [] [] _ _
-  | is_false H := is_false $ λ H2,
-    have H3 : reduce ((x, bnot b) :: (x, b) :: tl) = [(x, bnot b)],
-      from reduce.eq_of_red (red.cons H2),
-    H $ H3 ▸ reduce.rev (red.cons_bnot_rev)
+  | is_false H := is_false $ λ H2, H $ red.inv_of_red_nil H2
   end
 | ((x1,b1)::tl1) ((x2,b2)::tl2) := if h : (x1, b1) = (x2, b2)
   then match red.decidable_rel tl1 tl2 with
