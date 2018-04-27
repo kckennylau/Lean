@@ -1,5 +1,4 @@
 import data.equiv
-#check equiv.refl 
 
 universes u v w
 
@@ -8,8 +7,16 @@ class transportable (f : Type u → Type v) :=
 (on_refl  : Π (α : Type u), on_equiv (equiv.refl α) = equiv.refl (f α))
 (on_trans : Π {α β γ : Type u} (d : equiv α β) (e : equiv β γ), on_equiv (equiv.trans d e) = equiv.trans (on_equiv d) (on_equiv e))
 
+local attribute [simp] transportable.on_refl transportable.on_trans
+
 -- Our goal is an automagic proof of the following (level 20)
 theorem group.transportable : transportable group := sorry
+
+def transportable.trans (f : Type u → Type v) (g : Type v → Type w)
+  [transportable f] [transportable g] : transportable (g ∘ f) :=
+{ on_equiv := λ α β e, show g (f α) ≃ g (f β), from transportable.on_equiv g (transportable.on_equiv f e),
+  on_refl  := λ α, by simp,
+  on_trans := λ α β γ e₁ e₂, by simp }
 
 -- These we might need to define and prove by hand
 def Const : Type u → Type v := λ α, punit
