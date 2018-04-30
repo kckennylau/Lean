@@ -1,5 +1,39 @@
 import data.rat
 
+section rat
+
+theorem lt_two_pow (n : nat) : n < 2 ^ n :=
+nat.rec_on n dec_trivial $ λ n ih,
+calc  n + 1
+    < 2^n + 1   : nat.add_lt_add_right ih 1
+... ≤ 2^n + 2^n : nat.add_le_add_left (nat.pow_le_pow_of_le_right dec_trivial $ nat.zero_le n) (2^n)
+... = 2^n * 2   : eq.symm $ mul_two (2^n)
+... = 2^(n+1)   : eq.symm $ nat.pow_succ 2 n
+
+theorem rat.coe_pow (m n : nat) : (m : ℚ) ^ n = (m^n : ℕ) :=
+nat.rec_on n rfl $ λ n ih, by simp [pow_succ', ih, nat.pow_succ]
+
+theorem rat.num_pos_of_pos (r : rat) (H : r > 0) : r.num > 0 :=
+int.cast_lt.1 $
+calc  (r.num : ℚ)
+    = r.num / (r.denom:ℤ) * r.denom : eq.symm $ div_mul_cancel _ $ ne_of_gt $ nat.cast_pos.2 r.pos
+... = r * r.denom : by rw [← rat.mk_eq_div, ← rat.num_denom r]
+... > 0 : mul_pos H $ nat.cast_pos.2 r.pos
+
+theorem rat.one_le_num_of_pos (r : rat) (H : r > 0) : 1 ≤ (r.num : ℚ) :=
+have H1 : ((0+1:ℤ):ℚ) = (1:ℚ), from rfl,
+H1 ▸ int.cast_le.2 $ int.add_one_le_of_lt $ rat.num_pos_of_pos r H
+
+theorem rat.lt (r : ℚ) (H : r > 0) : (1 / 2^r.denom : ℚ) < r :=
+calc  (1 / 2^r.denom : ℚ)
+    < 1 / r.denom : one_div_lt_one_div_of_lt (nat.cast_pos.2 r.pos)
+  (trans_rel_left _ (nat.cast_lt.2 $ lt_two_pow _) (rat.coe_pow 2 _).symm)
+... ≤ r.num / r.denom : div_le_div_of_le_of_pos (rat.one_le_num_of_pos r H) (nat.cast_pos.2 r.pos)
+... = r.num / (r.denom:ℤ) : rfl
+... = r : by rw [← rat.mk_eq_div, ← rat.num_denom r]
+
+end rat
+
 instance rat.seq : comm_ring (ℕ → ℚ) :=
 by refine
 { add := λ f g n, f n + g n,
@@ -446,11 +480,26 @@ calc  abs (1 / f.1 n - 1 / g.1 n)
 ... = ε : by rw [mul_assoc, mul_assoc, mul_one_div_cancel (ne_of_gt Hε2),
   mul_one, mul_comm, mul_assoc, mul_one_div_cancel (ne_of_gt Hε1), mul_one]⟩
 
+theorem mul_inv_cancel : f * inv f Hf - 1 ∈ rat.null :=
+let ⟨ε, Hε, N, HN⟩ := rat.null.abs_pos_of_not_null f Hf in
+λ ε' Hε', ⟨N, λ n hn,
+have H1 : abs (f.1 n) ≠ 0,
+  from ne_of_gt $ lt_trans Hε $ HN n hn,
+have H2 : f.1 n ≠ 0,
+  from H1 ∘ abs_eq_zero.2,
+have H3 : f.1 n * (1 / f.1 n) - 1 = 0,
+  by rw [mul_one_div_cancel H2, sub_self],
+calc  abs (f.1 n * (1 / f.1 n) - 1)
+    = 0  : abs_eq_zero.2 H3
+... < ε' : Hε'⟩
+
 end rat.cau_seq
+
+namespace real
 
 local attribute [instance] classical.prop_decidable
 
-noncomputable def real.inv (x : real) : real :=
+noncomputable def inv (x : real) : real :=
 quotient.lift_on x (λ f, dite _
   (assume H : f ∈ rat.null, (0 : real))
   (assume H : f ∉ rat.null, ⟦rat.cau_seq.inv f H⟧)) $
@@ -464,3 +513,202 @@ quotient.lift_on x (λ f, dite _
     have H2 : g ∉ rat.null, from λ h, H $ H1 ▸ rat.null.add _ _ h hfg,
     (dif_neg H).trans $ eq.symm $ (dif_neg H2).trans $ eq.symm $ quotient.sound $
       rat.cau_seq.inv.well_defined _ _ _ _ hfg)
+
+theorem mul_inv_cancel {x : real} : x ≠ 0 → x * real.inv x = 1 :=
+quotient.induction_on x $ λ f hf,
+have H : f ∉ rat.null, from λ h, hf $ quotient.sound $
+  show f - 0 ∈ rat.null, from (sub_zero f).symm ▸ h,
+(congr_arg _ (dif_neg H)).trans $ quotient.sound $
+  rat.cau_seq.mul_inv_cancel _ _
+
+noncomputable instance : discrete_linear_ordered_field real :=
+{ inv := real.inv,
+  mul_inv_cancel := @real.mul_inv_cancel,
+  inv_mul_cancel := λ x, (mul_comm _ _).trans ∘ real.mul_inv_cancel,
+  decidable_le := λ _ _, classical.prop_decidable _,
+  inv_zero := dif_pos rat.null.zero,
+  .. real.linear_ordered_comm_ring }
+
+end real
+
+instance : has_coe ℚ real :=
+⟨λ q, ⟦⟨λ n, q, λ ε Hε, ⟨0, λ m hm n hn, show abs (q - q) < ε,
+from (sub_self q).symm ▸ (@abs_zero ℚ _).symm ▸ Hε⟩⟩⟧⟩
+
+theorem real.rat_eq_of_coe_eq {x y : ℚ} (H : (x : real) = y) : x = y :=
+by_contradiction $ λ H1,
+have H2 : x - y ≠ 0, from mt eq_of_sub_eq_zero H1,
+have H3 : _ := quotient.exact H (abs (x - y) / 2) (half_pos $ abs_pos_iff.2 H2),
+let ⟨N, HN⟩ := H3 in
+have H4 : _ := HN (N + 1) (nat.lt_succ_self N),
+lt_asymm H4 $ half_lt_self $ abs_pos_iff.2 H2
+
+theorem real.rat_lt_of_coe_lt {x y : ℚ} (H : (x : real) < y) : x < y :=
+let ⟨ε, Hε, N, HN⟩ := H in
+calc  x
+    < x + ε : lt_add_of_pos_right _ Hε
+... < y     : HN (N + 1) (nat.lt_succ_self N)
+
+theorem real.ex_rat_lt (x : real) : ∃ q : ℚ, (q : real) < x :=
+quotient.induction_on x $ λ f,
+let ⟨N, HN⟩ := f.2 1 zero_lt_one in
+⟨f.1 (N + 1) - 2, 1, zero_lt_one, N, λ n hn,
+calc  f.1 (N + 1) - 2 + 1
+    = f.1 (N + 1) - (2 - 1) : sub_add _ _ _
+... = f.1 (N + 1) - 1 : congr_arg _ $ add_sub_cancel _ _
+... = f.1 (N + 1) - f.1 n + f.1 n - 1 : by rw sub_add_cancel
+... < 1 + f.1 n - 1 : sub_lt_sub_right
+  (add_lt_add_right (abs_lt.1 $ HN _ (nat.lt_succ_self N) _ hn).2 _) _
+... = f.1 n : add_sub_cancel' _ _⟩
+
+theorem real.ex_lt_rat (x : real) : ∃ q : ℚ, x < (q : real) :=
+quotient.induction_on x $ λ f,
+let ⟨N, HN⟩ := f.2 1 zero_lt_one in
+⟨f.1 (N + 1) + 2, 1, zero_lt_one, N, λ n hn,
+calc  f.1 n + 1
+    = f.1 n - f.1 (N + 1) + f.1 (N + 1) + 1 : by rw sub_add_cancel
+... < 1 + f.1 (N + 1) + 1 : add_lt_add_right
+  (add_lt_add_right (abs_lt.1 $ HN _ hn _ (nat.lt_succ_self N)).2 _) _
+... = f.1 (N + 1) + 2 : by rw [add_comm (1:ℚ), add_assoc]; refl⟩
+
+section completeness
+
+local attribute [instance] classical.prop_decidable
+
+parameters (A : set real) (x ub : real)
+parameters (H1 : x ∈ A) (H2 : ∀ x ∈ A, x ≤ ub)
+
+noncomputable def bin_div : ℕ → ℚ × ℚ
+| 0     := (classical.some $ real.ex_rat_lt x, classical.some $ real.ex_lt_rat ub)
+| (n+1) := if ∀ x ∈ A, x < (((bin_div n).1 + (bin_div n).2)/2 : ℚ) then
+    ((bin_div n).1, ((bin_div n).1 + (bin_div n).2)/2)
+  else
+    (((bin_div n).1 + (bin_div n).2)/2, (bin_div n).2)
+
+theorem bin_div.snd_sub_fst (n : nat) : (bin_div n).2 - (bin_div n).1 = ((bin_div 0).2 - (bin_div 0).1) / 2^n :=
+nat.rec_on n (div_one _).symm $ λ n ih,
+if H : ∀ x ∈ A, x < (((bin_div n).1 + (bin_div n).2)/2 : ℚ) then
+  have H1 : bin_div (n+1) = ((bin_div n).1, ((bin_div n).1 + (bin_div n).2)/2),
+    by dsimp [bin_div]; rw [if_pos H],
+  calc  (bin_div (n+1)).2 - (bin_div (n+1)).1
+      = (((bin_div n).1 + (bin_div n).2) - ((bin_div n).1 + (bin_div n).1))/2 : by rw [H1, sub_div, add_self_div_two]
+  ... = ((bin_div n).2 - (bin_div n).1)/2 : by rw add_sub_add_left_eq_sub
+  ... = (((bin_div 0).2 - (bin_div 0).1) / 2^n) / 2 : by rw ih
+  ... = ((bin_div 0).2 - (bin_div 0).1) / 2^(n+1) : by rw [div_div_eq_div_mul, pow_add]; refl
+else
+  have H1 : bin_div (n+1) = (((bin_div n).1 + (bin_div n).2)/2, (bin_div n).2),
+    by dsimp [bin_div]; rw [if_neg H],
+  calc  (bin_div (n+1)).2 - (bin_div (n+1)).1
+      = (((bin_div n).2 + (bin_div n).2) - ((bin_div n).1 + (bin_div n).2))/2 : by rw [H1, sub_div, add_self_div_two]
+  ... = ((bin_div n).2 - (bin_div n).1)/2 : by rw add_sub_add_right_eq_sub
+  ... = (((bin_div 0).2 - (bin_div 0).1) / 2^n) / 2 : by rw ih
+  ... = ((bin_div 0).2 - (bin_div 0).1) / 2^(n+1) : by rw [div_div_eq_div_mul, pow_add]; refl
+
+theorem bin_div.zero : (bin_div 0).1 < (bin_div 0).2 :=
+real.rat_lt_of_coe_lt $
+calc  ((bin_div 0).1 : real)
+    < x : classical.some_spec $ real.ex_rat_lt x
+... ≤ ub : H2 x H1
+... < (bin_div 0).2 : classical.some_spec $ real.ex_lt_rat ub
+
+theorem bin_div.fst_lt_snd_self (n : nat) : (bin_div n).1 < (bin_div n).2 :=
+lt_of_sub_pos $ trans_rel_left _
+  (div_pos (sub_pos_of_lt bin_div.zero) $ pow_pos two_pos _)
+  (bin_div.snd_sub_fst n).symm
+
+theorem bin_div.lt_snd (x) (hx : x ∈ A) (n : nat) : x < ((bin_div n).2 : real) :=
+nat.rec_on n
+  (calc x
+      ≤ ub : H2 x hx
+  ... < (bin_div 0).2 : classical.some_spec $ real.ex_lt_rat ub) $ λ n ih,
+if H : ∀ x ∈ A, x < (((bin_div n).1 + (bin_div n).2)/2 : ℚ) then
+  have H1 : (bin_div (n+1)).2 = ((bin_div n).1 + (bin_div n).2)/2,
+    by dsimp [bin_div]; rw [if_pos H],
+  trans_rel_left _ (H x hx) $ congr_arg _ H1.symm
+else
+  have H1 : (bin_div (n+1)).2 = (bin_div n).2,
+    by dsimp [bin_div]; rw [if_neg H],
+  trans_rel_left _ ih $ congr_arg _ H1.symm
+
+theorem bin_div.ex_fst_lt (n : nat) : ∃ x ∈ A, ((bin_div n).1 : real) ≤ x :=
+nat.rec_on n ⟨x, H1, le_of_lt $ classical.some_spec $ real.ex_rat_lt x⟩ $ λ n ih,
+if H : ∀ x ∈ A, x < (((bin_div n).1 + (bin_div n).2)/2 : ℚ) then
+  have H1 : (bin_div (n+1)).1 = (bin_div n).1,
+    by dsimp [bin_div]; rw [if_pos H],
+  let ⟨y, hy1, hy2⟩ := ih in
+  ⟨y, hy1, trans_rel_right _ (congr_arg _ H1) hy2⟩
+else
+  have H1 : (bin_div (n+1)).1 = ((bin_div n).1 + (bin_div n).2)/2,
+    by dsimp [bin_div]; rw [if_neg H],
+  by simpa [not_forall, H1] using H
+
+theorem bin_div.fst_le_succ (n : nat) : (bin_div n).1 ≤ (bin_div (n+1)).1 :=
+if H : ∀ x ∈ A, x < (((bin_div n).1 + (bin_div n).2)/2 : ℚ) then
+  have H1 : (bin_div (n+1)).1 = (bin_div n).1,
+    by dsimp [bin_div]; rw [if_pos H],
+  le_of_eq H1.symm
+else
+  have H1 : (bin_div (n+1)).1 = ((bin_div n).1 + (bin_div n).2)/2,
+    by dsimp [bin_div]; rw [if_neg H],
+  trans_rel_left _ (trans_rel_right _ (add_self_div_two _).symm $
+    (div_le_div_right two_pos).2 $ add_le_add_left
+      (le_of_lt $ bin_div.fst_lt_snd_self n) _) H1.symm
+
+theorem bin_div.snd_le_succ (n : nat) : (bin_div (n+1)).2 ≤ (bin_div n).2 :=
+if H : ∀ x ∈ A, x < (((bin_div n).1 + (bin_div n).2)/2 : ℚ) then
+  have H1 : (bin_div (n+1)).2 = ((bin_div n).1 + (bin_div n).2)/2,
+    by dsimp [bin_div]; rw [if_pos H],
+  trans_rel_right _ H1 $ le_of_lt $ trans_rel_left _
+    ((div_lt_div_right two_pos).2 $ add_lt_add_right (bin_div.fst_lt_snd_self n) _)
+    (add_self_div_two _)
+else
+  have H1 : (bin_div (n+1)).2 = (bin_div n).2,
+    by dsimp [bin_div]; rw [if_neg H],
+  le_of_eq H1
+
+theorem bin_div.fst_le : ∀ n m : nat, n ≤ m → (bin_div n).1 ≤ (bin_div m).1
+| _ _     (nat.less_than_or_equal.refl n) := le_refl _
+| n (m+1) (nat.less_than_or_equal.step H) := le_trans
+  (bin_div.fst_le n m H) (bin_div.fst_le_succ m)
+
+theorem bin_div.snd_le : ∀ n m : nat, n ≤ m → (bin_div m).2 ≤ (bin_div n).2
+| _ _     (nat.less_than_or_equal.refl n) := le_refl _
+| n (m+1) (nat.less_than_or_equal.step H) := le_trans
+  (bin_div.snd_le_succ m) (bin_div.snd_le n m H)
+
+theorem bin_div.fst_lt_snd (n m : nat) : (bin_div n).1 < (bin_div m).2 :=
+or.cases_on (@nat.le_total m n)
+  (assume H : m ≤ n, lt_of_lt_of_le (bin_div.fst_lt_snd_self n) $ bin_div.snd_le m n H)
+  (assume H : n ≤ m, lt_of_le_of_lt (bin_div.fst_le n m H) (bin_div.fst_lt_snd_self m))
+
+theorem bin_div.snd_sub_fst_le : ∀ n m : nat, n ≤ m → (bin_div n).2 - (bin_div m).1 ≤ ((bin_div 0).2 - (bin_div 0).1) / 2^n
+| _ _     (nat.less_than_or_equal.refl n) := le_of_eq $ bin_div.snd_sub_fst n
+| n (m+1) (nat.less_than_or_equal.step H) := le_trans
+  (sub_le_sub_left (bin_div.fst_le_succ m) _)
+  (bin_div.snd_sub_fst_le n m H)
+
+theorem bin_div.snd_sub_snd_lt_pow (n m : nat) : (bin_div n).2 - (bin_div m).2 < ((bin_div 0).2 - (bin_div 0).1) / 2^n :=
+trans_rel_left _ (sub_lt_sub_left (bin_div.fst_lt_snd n m) _) (bin_div.snd_sub_fst n)
+
+theorem bin_div.cau_seq : prod.snd ∘ bin_div ∈ rat.cau_seq := λ ε Hε,
+let N := (ε / ((bin_div 0).2 - (bin_div 0).1)).denom in
+⟨N, λ m hm n hn,
+have H1 : (bin_div (N+1)).2 - (bin_div m).2 ≥ 0, from
+sub_nonneg_of_le $ bin_div.snd_le (N+1) m hm,
+have H2 : (bin_div (N+1)).2 - (bin_div n).2 ≥ 0, from
+sub_nonneg_of_le $ bin_div.snd_le (N+1) n hn,
+calc  abs ((bin_div m).2 - (bin_div n).2)
+    ≤ abs ((bin_div m).2 - (bin_div (N+1)).2) + abs ((bin_div (N+1)).2 - (bin_div n).2) : abs_sub_le _ _ _
+... = abs ((bin_div (N+1)).2 - (bin_div m).2) + abs ((bin_div (N+1)).2 - (bin_div n).2) : by rw abs_sub
+... = ((bin_div (N+1)).2 - (bin_div m).2) + ((bin_div (N+1)).2 - (bin_div n).2) : by rw [abs_of_nonneg H1, abs_of_nonneg H2]
+... < _ : add_lt_add (bin_div.snd_sub_snd_lt_pow (N+1) m) (bin_div.snd_sub_snd_lt_pow (N+1) n)
+... = ((bin_div 0).2 - (bin_div 0).1) / (2^N) : by rw [pow_succ', ← div_div_eq_div_mul, add_halves]
+... = ((bin_div 0).2 - (bin_div 0).1) * (1 / (2^N)) : div_eq_mul_one_div _ _
+... < ((bin_div 0).2 - (bin_div 0).1) * (ε / ((bin_div 0).2 - (bin_div 0).1)) : mul_lt_mul_of_pos_left
+  (rat.lt _ $ div_pos Hε $ sub_pos_of_lt bin_div.zero) (sub_pos_of_lt bin_div.zero)
+... = ε : mul_div_cancel' _ $ ne_of_gt $ sub_pos_of_lt bin_div.zero⟩
+
+noncomputable def sup : real :=
+⟦⟨prod.snd ∘ bin_div, bin_div.cau_seq⟩⟧
+
+end completeness
