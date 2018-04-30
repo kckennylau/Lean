@@ -1,4 +1,4 @@
-import data.rat linear_algebra.quotient_module ring_theory.ideals
+import data.rat
 
 instance rat.seq : comm_ring (ℕ → ℚ) :=
 by refine
@@ -85,7 +85,7 @@ by refine
   { simp [mul_assoc, mul_add, add_mul] }
   <|> simp [mul_comm] }
 
-def abs : rat.cau_seq :=
+protected def abs : rat.cau_seq :=
 ⟨λ n, abs (f n), λ ε Hε,
 let ⟨N, HN⟩ := hf ε Hε in
 ⟨N, λ m hm n hn, lt_of_le_of_lt
@@ -239,7 +239,7 @@ let ⟨ε, Hε, N, HN⟩ := H in
 ⟨ε, Hε, N, λ n hn, show f n + g n + ε < f n + h n,
 from (add_assoc (f n) (g n) ε).symm ▸ add_lt_add_left (HN n hn) _⟩
 
-theorem mul_pos (Hf : lt 0 f) (Hg : lt 0 g) : lt 0 (f * g) :=
+protected theorem mul_pos (Hf : lt 0 f) (Hg : lt 0 g) : lt 0 (f * g) :=
 let ⟨ε1, Hε1, N1, HN1⟩ := Hf in
 let ⟨ε2, Hε2, N2, HN2⟩ := Hg in
 ⟨ε1 * ε2, mul_pos Hε1 Hε2, max N1 N2, λ n hn,
@@ -377,3 +377,90 @@ instance real.linear_ordered_comm_ring : linear_ordered_comm_ring real :=
     let ⟨N, HN⟩ := quotient.exact H.symm 0.5 dec_trivial in
     absurd (HN (N + 1) (nat.lt_succ_self N)) dec_trivial,
   .. real.comm_ring, .. real.partial_order }
+
+namespace rat.cau_seq
+
+variables (f : rat.cau_seq) (Hf : f ∉ rat.null)
+
+theorem inv.of_not_null : (λ n, 1 / f.1 n) ∈ rat.cau_seq := λ ε Hε,
+let ⟨ε', Hε', N1, HN1⟩ := rat.null.abs_pos_of_not_null f Hf in
+let ⟨N2, HN2⟩ := f.2 (ε * ε' * ε') (mul_pos (mul_pos Hε Hε') Hε') in
+⟨max N1 N2, λ m hm n hn,
+have H : _ := HN2 n (lt_of_le_of_lt (le_max_right _ _) hn)
+  m (lt_of_le_of_lt (le_max_right _ _) hm),
+have H1 : _ := HN1 m (lt_of_le_of_lt (le_max_left _ _) hm),
+have H2 : _ := HN1 n (lt_of_le_of_lt (le_max_left _ _) hn),
+have H3 : abs (f.1 m) > 0 := lt_trans Hε' H1,
+have H4 : abs (f.1 n) > 0 := lt_trans Hε' H2,
+calc  abs (1 / f.1 m - 1 / f.1 n)
+    = abs ((1 / f.1 m) * (f.1 n - f.1 m) * (1 / f.1 n)) :
+  congr_arg abs $ eq.symm $ one_div_mul_sub_mul_one_div_eq_one_div_add_one_div
+    (ne_zero_of_abs_ne_zero $ ne_of_gt H3)
+    (ne_zero_of_abs_ne_zero $ ne_of_gt H4)
+... = (1 / abs (f.1 m)) * abs (f.1 n - f.1 m) * (1 / abs (f.1 n)) :
+  by rw [abs_mul, abs_mul, abs_one_div, abs_one_div]
+... < (1 / ε') * (ε * ε' * ε') * (1 / ε') :
+  mul_lt_mul
+    (mul_lt_mul'
+      (one_div_le_one_div_of_le Hε' $ le_of_lt H1)
+      H
+      (abs_nonneg _)
+      (one_div_pos_of_pos Hε'))
+    (one_div_le_one_div_of_le Hε' $ le_of_lt H2)
+    (one_div_pos_of_pos H4)
+    (le_of_lt $ mul_pos (one_div_pos_of_pos Hε') (mul_pos (mul_pos Hε Hε') Hε'))
+... = ε : by rw [mul_assoc, mul_assoc, mul_one_div_cancel (ne_of_gt Hε'),
+  mul_one, mul_comm, mul_assoc, mul_one_div_cancel (ne_of_gt Hε'), mul_one]⟩
+
+def inv : rat.cau_seq :=
+⟨_, inv.of_not_null f Hf⟩
+
+variables (g : rat.cau_seq) (Hg : g ∉ rat.null)
+
+theorem inv.well_defined (H : f - g ∈ rat.null) :
+  inv f Hf - inv g Hg ∈ rat.null := λ ε Hε,
+let ⟨ε1, Hε1, N1, HN1⟩ := rat.null.abs_pos_of_not_null f Hf in
+let ⟨ε2, Hε2, N2, HN2⟩ := rat.null.abs_pos_of_not_null g Hg in
+let ⟨N, HN⟩ := H (ε * ε1 * ε2) (mul_pos (mul_pos Hε Hε1) Hε2) in
+⟨max N (max N1 N2), λ n hn,
+have H1 : _ := HN1 n (lt_of_le_of_lt (le_trans (le_max_left _ _) (le_max_right _ _)) hn),
+have H2 : _ := HN2 n (lt_of_le_of_lt (le_trans (le_max_right _ _) (le_max_right _ _)) hn),
+have H3 : _ := HN n (lt_of_le_of_lt (le_max_left _ _) hn),
+calc  abs (1 / f.1 n - 1 / g.1 n)
+    = abs ((1 / f.1 n) * (g.1 n - f.1 n) * (1 / g.1 n)) :
+  congr_arg abs $ eq.symm $ one_div_mul_sub_mul_one_div_eq_one_div_add_one_div
+    (ne_zero_of_abs_ne_zero $ ne_of_gt (lt_trans Hε1 H1))
+    (ne_zero_of_abs_ne_zero $ ne_of_gt (lt_trans Hε2 H2))
+... = (1 / abs (f.1 n)) * abs (f.1 n - g.1 n) * (1 / abs (g.1 n)) :
+  by rw [abs_mul, abs_mul, abs_one_div, abs_one_div, abs_sub]
+... < (1 / ε1) * (ε * ε1 * ε2) * (1 / ε2) :
+  mul_lt_mul
+    (mul_lt_mul'
+      (one_div_le_one_div_of_le Hε1 $ le_of_lt H1)
+      H3
+      (abs_nonneg _)
+      (one_div_pos_of_pos Hε1))
+    (one_div_le_one_div_of_le Hε2 $ le_of_lt H2)
+    (one_div_pos_of_pos (lt_trans Hε2 H2))
+    (le_of_lt $ mul_pos (one_div_pos_of_pos Hε1) (mul_pos (mul_pos Hε Hε1) Hε2))
+... = ε : by rw [mul_assoc, mul_assoc, mul_one_div_cancel (ne_of_gt Hε2),
+  mul_one, mul_comm, mul_assoc, mul_one_div_cancel (ne_of_gt Hε1), mul_one]⟩
+
+end rat.cau_seq
+
+local attribute [instance] classical.prop_decidable
+
+noncomputable def real.inv (x : real) : real :=
+quotient.lift_on x (λ f, dite _
+  (assume H : f ∈ rat.null, (0 : real))
+  (assume H : f ∉ rat.null, ⟦rat.cau_seq.inv f H⟧)) $
+λ f g hfg, dite _
+  (assume H : f ∈ rat.null,
+    have H1 : f + (-1) * (f - g) = g := by rw [neg_one_mul, ← sub_eq_add_neg, sub_sub_cancel],
+    have H2 : g ∈ rat.null, from H1 ▸ rat.null.add _ _ H (rat.null.mul _ _ hfg),
+    (dif_pos H).trans (dif_pos H2).symm)
+  (assume H : f ∉ rat.null,
+    have H1 : g + (f - g) = f := add_sub_cancel'_right _ _,
+    have H2 : g ∉ rat.null, from λ h, H $ H1 ▸ rat.null.add _ _ h hfg,
+    (dif_neg H).trans $ eq.symm $ (dif_neg H2).trans $ eq.symm $ quotient.sound $
+      rat.cau_seq.inv.well_defined _ _ _ _ hfg)
