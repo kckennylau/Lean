@@ -616,21 +616,21 @@ lt_of_sub_pos $ trans_rel_left _
   (div_pos (sub_pos_of_lt bin_div.zero) $ pow_pos two_pos _)
   (bin_div.snd_sub_fst n).symm
 
-theorem bin_div.lt_snd (x) (hx : x ∈ A) (n : nat) : x < ((bin_div n).2 : real) :=
+theorem bin_div.lt_snd (r) (hr : r ∈ A) (n : nat) : r < ((bin_div n).2 : real) :=
 nat.rec_on n
-  (calc x
-      ≤ ub : H2 x hx
+  (calc r
+      ≤ ub : H2 r hr
   ... < (bin_div 0).2 : classical.some_spec $ real.ex_lt_rat ub) $ λ n ih,
 if H : ∀ x ∈ A, x < (((bin_div n).1 + (bin_div n).2)/2 : ℚ) then
   have H1 : (bin_div (n+1)).2 = ((bin_div n).1 + (bin_div n).2)/2,
     by dsimp [bin_div]; rw [if_pos H],
-  trans_rel_left _ (H x hx) $ congr_arg _ H1.symm
+  trans_rel_left _ (H r hr) $ congr_arg _ H1.symm
 else
   have H1 : (bin_div (n+1)).2 = (bin_div n).2,
     by dsimp [bin_div]; rw [if_neg H],
   trans_rel_left _ ih $ congr_arg _ H1.symm
 
-theorem bin_div.ex_fst_lt (n : nat) : ∃ x ∈ A, ((bin_div n).1 : real) ≤ x :=
+theorem bin_div.ex_fst_le (n : nat) : ∃ x ∈ A, ((bin_div n).1 : real) ≤ x :=
 nat.rec_on n ⟨x, H1, le_of_lt $ classical.some_spec $ real.ex_rat_lt x⟩ $ λ n ih,
 if H : ∀ x ∈ A, x < (((bin_div n).1 + (bin_div n).2)/2 : ℚ) then
   have H1 : (bin_div (n+1)).1 = (bin_div n).1,
@@ -687,10 +687,31 @@ theorem bin_div.snd_sub_fst_le : ∀ n m : nat, n ≤ m → (bin_div n).2 - (bin
   (sub_le_sub_left (bin_div.fst_le_succ m) _)
   (bin_div.snd_sub_fst_le n m H)
 
+theorem bin_div.fst_sub_fst_lt_pow (n m : nat) : (bin_div n).1 - (bin_div m).1 < ((bin_div 0).2 - (bin_div 0).1) / 2^m :=
+trans_rel_left _ (sub_lt_sub_right (bin_div.fst_lt_snd n m) _) (bin_div.snd_sub_fst m)
+
 theorem bin_div.snd_sub_snd_lt_pow (n m : nat) : (bin_div n).2 - (bin_div m).2 < ((bin_div 0).2 - (bin_div 0).1) / 2^n :=
 trans_rel_left _ (sub_lt_sub_left (bin_div.fst_lt_snd n m) _) (bin_div.snd_sub_fst n)
 
-theorem bin_div.cau_seq : prod.snd ∘ bin_div ∈ rat.cau_seq := λ ε Hε,
+theorem bin_div.fst_cau_seq : prod.fst ∘ bin_div ∈ rat.cau_seq := λ ε Hε,
+let N := (ε / ((bin_div 0).2 - (bin_div 0).1)).denom in
+⟨N, λ m hm n hn,
+have H1 : (bin_div m).1 - (bin_div (N+1)).1 ≥ 0, from
+sub_nonneg_of_le $ bin_div.fst_le (N+1) m hm,
+have H2 : (bin_div n).1 - (bin_div (N+1)).1 ≥ 0, from
+sub_nonneg_of_le $ bin_div.fst_le (N+1) n hn,
+calc  abs ((bin_div m).1 - (bin_div n).1)
+    ≤ abs ((bin_div m).1 - (bin_div (N+1)).1) + abs ((bin_div (N+1)).1 - (bin_div n).1) : abs_sub_le _ _ _
+... = abs ((bin_div m).1 - (bin_div (N+1)).1) + abs ((bin_div n).1 - (bin_div (N+1)).1) : by rw abs_sub (bin_div n).1
+... = ((bin_div m).1 - (bin_div (N+1)).1) + ((bin_div n).1 - (bin_div (N+1)).1) : by rw [abs_of_nonneg H1, abs_of_nonneg H2]
+... < _ : add_lt_add (bin_div.fst_sub_fst_lt_pow m (N+1)) (bin_div.fst_sub_fst_lt_pow n (N+1))
+... = ((bin_div 0).2 - (bin_div 0).1) / (2^N) : by rw [pow_succ', ← div_div_eq_div_mul, add_halves]
+... = ((bin_div 0).2 - (bin_div 0).1) * (1 / (2^N)) : div_eq_mul_one_div _ _
+... < ((bin_div 0).2 - (bin_div 0).1) * (ε / ((bin_div 0).2 - (bin_div 0).1)) : mul_lt_mul_of_pos_left
+  (rat.lt _ $ div_pos Hε $ sub_pos_of_lt bin_div.zero) (sub_pos_of_lt bin_div.zero)
+... = ε : mul_div_cancel' _ $ ne_of_gt $ sub_pos_of_lt bin_div.zero⟩
+
+theorem bin_div.snd_cau_seq : prod.snd ∘ bin_div ∈ rat.cau_seq := λ ε Hε,
 let N := (ε / ((bin_div 0).2 - (bin_div 0).1)).denom in
 ⟨N, λ m hm n hn,
 have H1 : (bin_div (N+1)).2 - (bin_div m).2 ≥ 0, from
@@ -709,6 +730,69 @@ calc  abs ((bin_div m).2 - (bin_div n).2)
 ... = ε : mul_div_cancel' _ $ ne_of_gt $ sub_pos_of_lt bin_div.zero⟩
 
 noncomputable def sup : real :=
-⟦⟨prod.snd ∘ bin_div, bin_div.cau_seq⟩⟧
+⟦⟨prod.snd ∘ bin_div, bin_div.snd_cau_seq⟩⟧
+
+theorem bin_div.sup_le_snd (n : nat) : sup ≤ (bin_div n).2 :=
+le_of_not_gt $ λ ⟨ε, Hε, N, HN⟩, lt_asymm
+  (HN (n+N+1) (nat.succ_le_succ $ nat.le_add_left _ _))
+  (lt_of_le_of_lt
+    (bin_div.snd_le n (n+N+1) (nat.le_add_right n (N+1)))
+    (lt_add_of_pos_right _ Hε))
+
+theorem bin_div.mk_fst_eq_sup : (⟦⟨prod.fst ∘ bin_div, bin_div.fst_cau_seq⟩⟧ : real) = sup :=
+quotient.sound $ λ ε Hε,
+let N := (ε / ((bin_div 0).2 - (bin_div 0).1)).denom in
+⟨N, λ n hn,
+have H1 : (2:ℚ)^n > (2:ℚ)^N, from
+calc  (2:ℚ)^n
+    = ((2^n:ℕ):ℚ) : rat.coe_pow 2 n
+... > ((2^N:ℕ):ℚ) : nat.cast_lt.2 $ nat.pow_lt_pow_of_lt_right (nat.lt_succ_self 1) hn
+... = (2:ℚ)^N      : eq.symm $ rat.coe_pow 2 N,
+have H2 : (2:ℚ)^n > (2:ℚ)^N, from
+calc  (2:ℚ)^n
+    = ((2^n:ℕ):ℚ) : rat.coe_pow 2 n
+... > ((2^N:ℕ):ℚ) : nat.cast_lt.2 $ nat.pow_lt_pow_of_lt_right (nat.lt_succ_self 1) hn
+... = (2:ℚ)^N      : eq.symm $ rat.coe_pow 2 N,
+calc  abs ((bin_div n).1 - (bin_div n).2)
+    = abs ((bin_div n).2 - (bin_div n).1) : abs_sub _ _
+... = (bin_div n).2 - (bin_div n).1 : abs_of_pos $ sub_pos_of_lt $ bin_div.fst_lt_snd_self n
+... = ((bin_div 0).2 - (bin_div 0).1) / 2^n : bin_div.snd_sub_fst n
+... < ((bin_div 0).2 - (bin_div 0).1) / 2^N :
+  (div_lt_div_left (sub_pos_of_lt bin_div.zero) (pow_pos two_pos _) (pow_pos two_pos _)).2 H1
+... = ((bin_div 0).2 - (bin_div 0).1) * (1 / (2^N)) : div_eq_mul_one_div _ _
+... < ((bin_div 0).2 - (bin_div 0).1) * (ε / ((bin_div 0).2 - (bin_div 0).1)) : mul_lt_mul_of_pos_left
+  (rat.lt _ $ div_pos Hε $ sub_pos_of_lt bin_div.zero) (sub_pos_of_lt bin_div.zero)
+... = ε : mul_div_cancel' _ $ ne_of_gt $ sub_pos_of_lt bin_div.zero⟩
+
+theorem le_sup (r : real) : r ∈ A → r ≤ sup :=
+quotient.induction_on r $ λ f hf, le_of_not_gt $ λ ⟨ε1, Hε1, N1, HN1⟩,
+let ⟨N2, HN2⟩ := f.2 (ε1/2) (half_pos Hε1) in
+let ⟨ε3, Hε3, N3, HN3⟩ := bin_div.lt_snd _ hf (N1+N2+1) in
+have H1 : _ := HN1 (N1+N2+1) (nat.succ_le_succ $ nat.le_add_right _ _),
+have H2 : _ := HN2 (N1+N2+1) (nat.succ_le_succ $ nat.le_add_left _ _)
+  (N2+N3+1) (nat.succ_le_succ $ nat.le_add_right _ _),
+have H3 : _ := HN3 (N2+N3+1) (nat.succ_le_succ $ nat.le_add_left _ _),
+lt_irrefl _ $
+calc  f.1 (N2+N3+1) + ε1
+    < f.1 (N2+N3+1) + ε3 + ε1 : add_lt_add_right (lt_add_of_pos_right _ Hε3) _
+... < (bin_div (N1+N2+1)).2 + ε1 : add_lt_add_right H3 _
+... < f.1 (N1+N2+1) : H1
+... = f.1 (N2+N3+1) + (f.1 (N1+N2+1) - f.1 (N2+N3+1)) : eq.symm $ add_sub_cancel'_right _ _
+... < f.1 (N2+N3+1) + ε1/2 : add_lt_add_left (abs_lt.1 H2).2 _
+... < f.1 (N2+N3+1) + ε1 : add_lt_add_left (half_lt_self Hε1) _
+
+theorem sup_le (r : real) : (∀ x ∈ A, x ≤ r) → sup ≤ r :=
+quotient.induction_on r $ λ f hf, bin_div.mk_fst_eq_sup ▸ (le_of_not_gt $ λ ⟨ε, Hε, N1, HN1⟩,
+let ⟨N2, HN2⟩ := f.2 (ε/2) (half_pos Hε) in
+let ⟨r, hr1, hr2⟩ := bin_div.ex_fst_le (N1+N2+1) in
+have H1 : _ := HN1 (N1+N2+1) (nat.succ_le_succ $ nat.le_add_right _ _),
+not_lt_of_ge (le_trans hr2 $ hf r hr1) $ ⟨ε/2, half_pos Hε, N2, λ n hn,
+have H2 : _ := HN2 n hn (N1+N2+1) (nat.succ_le_succ $ nat.le_add_left _ _),
+calc  f.1 n + ε/2
+    = f.1 (N1+N2+1) + (f.1 n - f.1 (N1+N2+1)) + ε/2 : by rw add_sub_cancel'_right
+... < f.1 (N1+N2+1) + ε/2 + ε/2 : add_lt_add_right (add_lt_add_left (abs_lt.1 $ H2).2 _) _
+... = f.1 (N1+N2+1) + (ε/2 + ε/2) : add_assoc _ _ _
+... = f.1 (N1+N2+1) + ε : by rw add_halves
+... < (bin_div (N1+N2+1)).1 : H1⟩)
 
 end completeness
