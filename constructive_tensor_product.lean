@@ -2,7 +2,7 @@ import group_theory.coset
 import group_theory.free_group
 import linear_algebra.basic
 
-universes u v w u₁
+universes u v w u₁ v₁
 variable (α : Type u)
 
 def is_add_group_hom {α : Type u} {β : Type v} [add_group α] [add_group β] (f : α → β) : Prop :=
@@ -54,13 +54,17 @@ def left_cosets.lift_on.mul (H : ∀ x ∈ N, f x = 1) :
   left_cosets.lift_on (x * y) f H = left_cosets.lift_on x f H * left_cosets.lift_on y f H :=
 @is_group_hom.mul _ _ _ _ _ (left_cosets.lift_on.is_group_hom _ _) _ _
 
+@[simp] lemma left_cosets.lift_on.commutes (H : ∀ x ∈ N, f x = 1) (z : α) :
+  left_cosets.lift_on ⟦z⟧ f H = f z :=
+rfl
+
 end quotient
 
 section quotient
 
-variables {α} [group α] {N : set α} [normal_subgroup N]
+variables {α} [add_group α] {N : set $ multiplicative α} [normal_subgroup N]
 variables (x y : additive $ left_cosets N)
-variables {β : Type v} [add_group β] (f : additive α → β) [is_add_group_hom f]
+variables {β : Type v} [add_group β] (f : α → β) [is_add_group_hom f]
 
 local attribute [instance] left_rel normal_subgroup.to_is_subgroup
 
@@ -69,11 +73,15 @@ def left_cosets.add.lift_on (H : ∀ x ∈ N, f x = 0) : β :=
 
 def left_cosets.add.lift_on.is_add_group_hom (H : ∀ x ∈ N, f x = 0) :
   is_add_group_hom (λ x, left_cosets.add.lift_on x f H) :=
-@left_cosets.lift_on.is_group_hom _ _ _ _ (multiplicative β) _ _ ⟨λ _ _, is_add_group_hom.add f _ _⟩ _
+@left_cosets.lift_on.is_group_hom _ _ _ _ (multiplicative β) _ _ _inst_4 _
 
 def left_cosets.add.lift_on.add (H : ∀ x ∈ N, f x = 0) :
   left_cosets.add.lift_on (x + y) f H = left_cosets.add.lift_on x f H + left_cosets.add.lift_on y f H :=
-@left_cosets.lift_on.mul _ _ _ _ _ _ (multiplicative β) _ _ ⟨λ _ _, is_add_group_hom.add f _ _⟩ _
+@left_cosets.lift_on.mul _ _ _ _ _ _ (multiplicative β) _ _ _inst_4 _
+
+@[simp] lemma left_cosets.add.lift_on.commutes (H : ∀ x ∈ N, f x = 0) (z : α) :
+  left_cosets.add.lift_on ⟦z⟧ f H = f z :=
+rfl
 
 end quotient
 
@@ -141,7 +149,7 @@ def abelianization.to_comm_group.is_group_hom :
 ⟨λ x y, quotient.induction_on₂ x y $ λ m n,
   show f (m * n) = f m * f n, from is_group_hom.mul f m n⟩
 
-@[simp] theorem abelianization.to_comm_group.of (x : α) :
+@[simp] lemma abelianization.to_comm_group.of (x : α) :
   abelianization.to_comm_group f (abelianization.of x) = f x :=
 rfl
 
@@ -227,7 +235,7 @@ section induction
 local attribute [instance] left_rel normal_subgroup.to_is_subgroup
 
 @[elab_as_eliminator]
-theorem free_abelian_group.induction_on
+protected theorem free_abelian_group.induction_on
   {C : free_abelian_group α → Prop}
   (z : free_abelian_group α)
   (C0 : C 0)
@@ -240,9 +248,59 @@ bool.rec_on b (Cp _ _ (Cn _ (C1 x)) ih) (Cp _ _ (C1 x) ih)
 
 end induction
 
-variables {R : Type u} (M : Type v) (N : Type w)
-variables [comm_ring R] [module R M] [module R N]
-include _inst_1
+variables {R : Type u} [comm_ring R]
+variables (M : Type v) (N : Type w) (P : Type u₁) (Q : Type v₁)
+variables [module R M] [module R N] [module R P] [module R Q]
+include R
+
+section bilinear
+
+variables {M N P Q}
+structure is_bilinear_map {M N P}
+  [module R M] [module R N] [module R P]
+  (f : M → N → P) : Prop :=
+(add_pair : ∀ x y z, f (x + y) z = f x z + f y z)
+(pair_add : ∀ x y z, f x (y + z) = f x y + f x z)
+(smul_pair : ∀ r x y, f (r • x) y = r • f x y)
+(pair_smul : ∀ r x y, f x (r • y) = r • f x y)
+
+variables {f : M → N → P} (hf : is_bilinear_map f)
+include hf
+
+theorem is_bilinear_map.zero_pair : ∀ y, f 0 y = 0 :=
+λ y, calc f 0 y
+        = f (0 + 0) y - f 0 y : by rw [hf.add_pair 0 0 y]; simp
+    ... = 0 : by simp
+
+theorem is_bilinear_map.pair_zero : ∀ x, f x 0 = 0 :=
+λ x, calc f x 0
+        = f x (0 + 0) - f x 0 : by rw [hf.pair_add x 0 0]; simp
+    ... = 0 : by simp
+
+theorem is_bilinear_map.neg_pair : ∀ x y, f (-x) y = -f x y :=
+λ x y, by convert hf.smul_pair (-1) x y; simp
+
+theorem is_bilinear_map.pair_neg : ∀ x y, f x (-y) = -f x y :=
+λ x y, by convert hf.pair_smul (-1) x y; simp
+
+theorem is_bilinear_map.linear_pair (y : N) : is_linear_map (λ x, f x y) :=
+{ add  := λ m n, hf.add_pair m n y,
+  smul := λ r m, hf.smul_pair r m y }
+
+theorem is_bilinear_map.pair_linear (x : M) : is_linear_map (λ y, f x y) :=
+{ add  := λ m n, hf.pair_add x m n,
+  smul := λ r m, hf.pair_smul r x m }
+
+variables {g : P → Q} (hg : is_linear_map g)
+include hg
+
+theorem is_bilinear_map.comp : is_bilinear_map (λ x y, g (f x y)) :=
+{ add_pair  := λ x y z, by rw [hf.add_pair, hg.add],
+  pair_add  := λ x y z, by rw [hf.pair_add, hg.add],
+  smul_pair := λ r x y, by rw [hf.smul_pair, hg.smul],
+  pair_smul := λ r x y, by rw [hf.pair_smul, hg.smul] }
+
+end bilinear
 
 namespace tensor_product
 
@@ -288,13 +346,10 @@ instance quotient.mk.is_add_group_hom :
     quotient.mk :=
 is_add_group_hom.mk _ $ λ _ _, rfl
 
-def smul.aux (r : R) (x : free_abelian_group (M × N)) : tensor_product M N :=
+local attribute [instance] free_abelian_group.to_add_comm_group.is_add_group_hom
+
+@[reducible] def smul.aux (r : R) (x : free_abelian_group (M × N)) : tensor_product M N :=
 free_abelian_group.to_add_comm_group (λ (y : M × N), of M N (r • y.1) (y.2)) x
-
-def smul.aux.is_add_group_hom (r : R) : is_add_group_hom (smul.aux M N r) :=
-free_abelian_group.to_add_comm_group.is_add_group_hom _
-
-local attribute [instance] smul.aux.is_add_group_hom
 
 def smul (r : R) (x : tensor_product M N) : tensor_product M N :=
 left_cosets.add.lift_on x (smul.aux M N r) $ λ x hx,
@@ -346,10 +401,84 @@ instance : module R (tensor_product M N) :=
     by rw [one_smul]; refl,
   .. tensor_product.add_comm_group M N }
 
-end module
+@[simp] lemma smul_def (r : R) (x : M) (y : N) : r • of M N x y = of M N (r • x) y :=
+rfl
 
-end tensor_product
+theorem bilinear : is_bilinear_map (of M N) :=
+{ add_pair := λ m1 m2 n, eq.symm $ sub_eq_zero.1 $ eq.symm $
+    quotient.sound $ group.in_closure.basic $ or.inl
+      ⟨_, _, _, by simp; refl⟩,
+  pair_add := λ m1 m2 n, eq.symm $ sub_eq_zero.1 $ eq.symm $
+    quotient.sound $ group.in_closure.basic $ or.inr $ or.inl
+      ⟨_, _, _, by simp; refl⟩,
+  smul_pair := λ r x y, rfl,
+  pair_smul := λ r x y, eq.symm $ sub_eq_zero.1 $ eq.symm $
+    quotient.sound $ group.in_closure.basic $ or.inr $ or.inr
+      ⟨_, _, _, by simp; refl⟩ }
+
+end module
 
 #print axioms tensor_product.module
 -- propext
 -- quot.sound
+
+local attribute [instance] left_rel normal_subgroup.to_is_subgroup
+
+variables {M N}
+@[elab_as_eliminator]
+protected theorem induction_on
+  {C : tensor_product M N → Prop}
+  (z : tensor_product M N)
+  (C0 : C 0)
+  (C1 : ∀ x y, C $ of M N x y)
+  (Cp : ∀ x y, C x → C y → C (x + y)) : C z :=
+quotient.induction_on z $ λ x, free_abelian_group.induction_on x
+  C0 (λ ⟨p, q⟩, C1 p q)
+  (λ ⟨p, q⟩ _, show C (-of M N p q), by rw ← (bilinear M N).neg_pair; from C1 (-p) q)
+  (λ _ _, Cp _ _)
+
+end tensor_product
+
+section UMP
+
+variables {M N P Q}
+variables {f : M → N → P} (hf : is_bilinear_map f)
+include hf
+
+local attribute [instance] free_abelian_group.to_add_comm_group.is_add_group_hom
+
+def tensor_product.to_module (x : tensor_product M N) : P :=
+left_cosets.add.lift_on x
+  (free_abelian_group.to_add_comm_group $ λ z, f z.1 z.2) $ λ x hx,
+begin
+  induction hx with _ hx _ _ ih _ _ _ _ ih1 ih2,
+  { rcases hx with ⟨_, m, n, hx⟩ | ⟨m, n, _, hx⟩ | ⟨_, _, _, hx⟩;
+    rw [hx]; symmetry; simp [coe_def],
+    { rw [hf.add_pair], simp [add_left_comm (f m n)] },
+    { rw [hf.pair_add], simp [add_left_comm (f m n)] },
+    { rw [hf.smul_pair, hf.pair_smul, add_neg_self] } },
+  { refl },
+  { change free_abelian_group.to_add_comm_group _ (-_) = (0:P),
+    simp [ih] },
+  { change free_abelian_group.to_add_comm_group _ (_ + _) = (0:P),
+    simp [ih1, ih2] }
+end
+
+local attribute [instance] left_rel normal_subgroup.to_is_subgroup
+
+theorem tensor_product.to_module.add (x y) :
+  tensor_product.to_module hf (x + y)
+  = tensor_product.to_module hf x + tensor_product.to_module hf y :=
+quotient.induction_on₂ x y $ λ m n,
+free_abelian_group.to_add_comm_group.add _ _ _
+
+def tensor_product.to_module.linear :
+  is_linear_map (tensor_product.to_module hf) :=
+{ add := tensor_product.to_module.add hf,
+  smul := λ c x, tensor_product.induction_on x smul_zero.symm
+    (λ p q, by rw [← (tensor_product.bilinear M N).smul_pair];
+      simp [tensor_product.to_module, tensor_product.of, hf.smul_pair])
+    (λ p q ih1 ih2, by simp [@smul_add _ _ _ _ c p q,
+      tensor_product.to_module.add, ih1, ih2, smul_add]) }
+
+end UMP
