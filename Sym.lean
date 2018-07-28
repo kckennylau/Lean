@@ -179,6 +179,14 @@ end
   i.succ.pred H = i :=
 by cases i; refl
 
+instance : decidable_linear_order (fin n) :=
+{ le_refl := λ ⟨i, hi⟩, nat.le_refl i,
+  le_trans := λ ⟨i, hi⟩ ⟨j, hj⟩ ⟨k, hk⟩ hij hjk, nat.le_trans hij hjk,
+  le_antisymm := λ ⟨i, hi⟩ ⟨j, hj⟩ hij hji, fin.eq_of_veq $ nat.le_antisymm hij hji,
+  le_total := λ ⟨i, hi⟩ ⟨j, hj⟩, or.cases_on (@nat.le_total i j) or.inl or.inr,
+  decidable_le := fin.decidable_le,
+  .. fin.has_le, .. }
+
 end fin
 
 
@@ -191,6 +199,13 @@ by simp [H]
 @[simp] lemma equiv.symm_apply_eq {α β} {e : α ≃ β} {x y} :
   e.symm x = y ↔ x = e y :=
 ⟨λ H, by simp [H.symm], λ H, by simp [H]⟩
+
+theorem finset.lt_wf {α} [decidable_eq α] :
+  well_founded (@has_lt.lt (finset α) _) :=
+have H : subrelation (@has_lt.lt (finset α) _)
+    (inv_image (<) finset.card),
+  from λ x y hxy, finset.card_lt_card hxy,
+subrelation.wf H $ inv_image.wf _ $ nat.lt_wf
 
 end miscellaneous
 
@@ -207,6 +222,13 @@ equiv.has_coe_to_fun
 @[extensionality] theorem Sym.ext (σ τ : Sym n)
   (H : ∀ i, σ i = τ i) : σ = τ :=
 equiv.ext _ _ H
+
+theorem Sym.ext_iff (σ τ : Sym n) :
+  σ = τ ↔ ∀ i, σ i = τ i :=
+⟨λ H i, H ▸ rfl, Sym.ext _ _ _⟩
+
+instance : decidable_eq (Sym n) :=
+λ σ τ, decidable_of_iff' _ (Sym.ext_iff _ _ _)
 
 instance : group (Sym n) :=
 equiv.perm_group
@@ -334,9 +356,6 @@ calc  Sym (n+1)
     ≃ (fin (n+1) × fin n.fact) : Sym.equiv_succ ih
 ... ≃ fin (n+1).fact : fin_prod
 
-instance : decidable_eq (Sym n) :=
-equiv.decidable_eq_of_equiv Sym.equiv
-
 instance : fintype (Sym n) :=
 fintype.of_equiv _ Sym.equiv.symm
 
@@ -351,3 +370,162 @@ nonempty.rec_on (fintype.card_eq.1 $ fintype.card_fin $ fintype.card α) $ λ φ
   λ i, by simp, λ i, by simp⟩,
 λ x y H, have H1 : _ := congr_fun (equiv.mk.inj H).1 (φ.symm 1), by simpa using H1,
 ⟨λ x y, Sym.ext _ _ _ $ λ i, by simp [mul_assoc]⟩⟩
+
+
+@[simp] lemma Sym.mul_apply (σ τ : Sym n) (i : fin n) :
+  (σ * τ) i = σ (τ i) :=
+rfl
+
+@[simp] lemma Sym.one_apply (i : fin n) :
+  (1 : Sym n) i = i :=
+rfl
+
+@[simp] lemma Sym.inv_apply (σ : Sym n) (i : fin n) :
+  σ⁻¹ i = σ.symm i :=
+rfl
+
+def Sym.swap (i j : fin n) : Sym n :=
+{ to_fun    := λ k, if k = i then j
+    else if k = j then i else k,
+  inv_fun   := λ k, if k = i then j
+    else if k = j then i else k,
+  left_inv  := λ k, by dsimp; split_ifs; cc,
+  right_inv := λ k, by dsimp; split_ifs; cc }
+
+@[simp] lemma Sym.swap_left (i j : fin n) :
+  Sym.swap i j i = j :=
+by dsimp [Sym.swap]; cc
+
+@[simp] lemma Sym.swap_right (i j : fin n) :
+  Sym.swap i j j = i :=
+by dsimp [Sym.swap]; split_ifs; cc
+
+@[simp] lemma Sym.swap_mul_self (i j : fin n) :
+  Sym.swap i j * Sym.swap i j = 1 :=
+Sym.ext _ _ _ $ λ k, by dsimp [Sym.swap]; split_ifs; cc
+
+theorem Sym.swap_comm (i j : fin n) :
+  Sym.swap i j = Sym.swap j i :=
+Sym.ext _ _ _ $ λ k, by dsimp [Sym.swap]; split_ifs; cc
+
+@[simp] theorem Sym.swap_self (i : fin n) :
+  Sym.swap i i = 1 :=
+Sym.ext _ _ _ $ λ k, by dsimp [Sym.swap]; split_ifs; cc
+
+def Sym.support (σ : Sym n) : finset (fin n) :=
+finset.filter (λ i, σ i ≠ i) finset.univ
+
+theorem Sym.support_def {σ : Sym n} {i : fin n} :
+  i ∈ σ.support ↔ σ i ≠ i :=
+⟨λ H, (finset.mem_filter.1 H).2, λ H, finset.mem_filter.2 ⟨finset.mem_univ _, H⟩⟩
+
+def Sym.support_choice (σ : Sym n) (H : σ.support ≠ ∅) :
+  { i // i ∈ σ.support } :=
+⟨@option.get _ σ.support.min $
+  let ⟨k, hk⟩ := finset.exists_mem_of_ne_empty H in
+  let ⟨b, hb⟩ := finset.min_of_mem hk in by simp at hb; simp [hb],
+finset.mem_of_min $ by simp⟩
+
+theorem Sym.support_swap_mul {σ : Sym n} {i : fin n}
+  (H : i ∈ σ.support) : (Sym.swap i (σ i) * σ).support < σ.support :=
+begin
+  split,
+  { intros j h1,
+    simp [Sym.support_def, Sym.swap] at *,
+    split_ifs at h1,
+    { intro h2, rw h2 at h, subst h, cc },
+    { cc },
+    { cc } },
+  intro H1,
+  specialize H1 H,
+  simp [Sym.support_def, Sym.swap] at H1,
+  apply H1,
+  split_ifs; cc
+end
+
+def Sym.is_valid (L : list (Sym n)) : Prop :=
+∀ τ ∈ L, ∃ i j, i ≠ j ∧ τ = Sym.swap i j
+
+def Sym.list_swap.aux : has_well_founded (Sym n) :=
+{ r := inv_image (<) Sym.support,
+  wf := inv_image.wf _ finset.lt_wf }
+
+local attribute [instance] Sym.list_swap.aux
+attribute [elab_as_eliminator] well_founded.fix
+attribute [elab_as_eliminator] well_founded.induction
+
+def Sym.list_swap (σ : Sym n) : list (Sym n) :=
+by refine well_founded.fix Sym.list_swap.aux.wf _ σ; from
+λ σ ih, if H : σ.support = ∅ then []
+  else let ⟨i, hi⟩ := σ.support_choice H in
+    (Sym.swap i (σ i)) :: ih (Sym.swap i (σ i) * σ) (Sym.support_swap_mul hi)
+
+theorem Sym.list_swap_valid (σ : Sym n) :
+  Sym.is_valid σ.list_swap :=
+well_founded.induction Sym.list_swap.aux.wf σ $ λ σ ih τ H,
+begin
+  dsimp [Sym.list_swap] at H,
+  rw [well_founded.fix_eq] at H,
+  split_ifs at H, { cases H },
+  cases Sym.support_choice σ h with i hi,
+  unfold Sym.list_swap._match_1 at H,
+  cases H with H H,
+  { subst H,
+    rw [Sym.support_def] at hi,
+    exact ⟨_, _, hi.symm, rfl⟩ },
+  exact ih _ (Sym.support_swap_mul hi) τ H
+end
+
+theorem Sym.list_swap_prod (σ : Sym n) :
+  σ.list_swap.prod = σ :=
+well_founded.induction Sym.list_swap.aux.wf σ $ λ σ ih,
+begin
+  dsimp [Sym.list_swap],
+  rw [well_founded.fix_eq],
+  split_ifs,
+  { ext, by_contra H,
+    suffices : i ∈ (∅ : finset (fin n)),
+    { simp at this, cc },
+    rw [← h, Sym.support_def],
+    exact mt eq.symm H },
+  cases Sym.support_choice σ h with i hi,
+  unfold Sym.list_swap._match_1,
+  specialize ih _ (Sym.support_swap_mul hi),
+  dsimp [Sym.list_swap] at ih,
+  rw [list.prod_cons, ih, ← mul_assoc, Sym.swap_mul_self, one_mul]
+end
+
+section mu2
+
+@[derive decidable_eq]
+inductive mu2 : Type
+| plus_one : mu2
+| minus_one : mu2
+
+open mu2
+
+definition neg : mu2 → mu2
+| plus_one := minus_one
+| minus_one := plus_one
+
+instance : has_one mu2 := ⟨plus_one⟩
+instance : has_neg mu2 := ⟨neg⟩
+
+instance : comm_group mu2 :=
+{ mul := λ x y, mu2.rec_on x (mu2.rec_on y 1 (-1)) (mu2.rec_on y (-1) 1),
+  mul_assoc := λ x y z, by cases x; cases y; cases z; refl,
+  mul_one := λ x, by cases x; refl,
+  one_mul := λ x, by cases x; refl,
+  inv := id,
+  mul_left_inv := λ x, by cases x; refl,
+  mul_comm := λ x y, by cases x; cases y; refl,
+  .. mu2.has_one }
+
+instance : fintype mu2 :=
+{ elems := {1, -1},
+  complete := λ x, mu2.cases_on x (or.inr $ or.inl rfl) (or.inl rfl) }
+
+theorem mu2.card : fintype.card mu2 = 2 :=
+rfl
+
+end mu2
