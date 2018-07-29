@@ -180,12 +180,16 @@ end
 by cases i; refl
 
 instance : decidable_linear_order (fin n) :=
-{ le_refl := λ ⟨i, hi⟩, nat.le_refl i,
+{ lt_iff_le_not_le := λ i j, nat.lt_iff_le_not_le,
+  le_refl := λ ⟨i, hi⟩, nat.le_refl i,
   le_trans := λ ⟨i, hi⟩ ⟨j, hj⟩ ⟨k, hk⟩ hij hjk, nat.le_trans hij hjk,
   le_antisymm := λ ⟨i, hi⟩ ⟨j, hj⟩ hij hji, fin.eq_of_veq $ nat.le_antisymm hij hji,
   le_total := λ ⟨i, hi⟩ ⟨j, hj⟩, or.cases_on (@nat.le_total i j) or.inl or.inr,
   decidable_le := fin.decidable_le,
-  .. fin.has_le, .. }
+  .. fin.has_le, .. fin.has_lt }
+
+instance : preorder (fin n) :=
+by apply_instance
 
 end fin
 
@@ -222,6 +226,11 @@ theorem finset.min'_le {α} [decidable_linear_order α]
   (x) (H2 : x ∈ S) : S.min' H ≤ x :=
 finset.le_min_of_mem H2 $ option.get_mem _
 
+theorem finset.le_min' {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅)
+  (x) (H2 : ∀ y ∈ S, x ≤ y) : x ≤ S.min' H :=
+H2 _ $ finset.min'_mem _ _
+
 def finset.max' {α} [decidable_linear_order α]
   (S : finset α) (H : S ≠ ∅) : α :=
 @option.get _ S.max $
@@ -237,21 +246,24 @@ theorem finset.le_max' {α} [decidable_linear_order α]
   (x) (H2 : x ∈ S) : x ≤ S.max' H :=
 finset.le_max_of_mem H2 $ option.get_mem _
 
-theorem finset.min'_ne_max' {α} [decidable_linear_order α]
+theorem finset.max'_le {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅)
+  (x) (H2 : ∀ y ∈ S, y ≤ x) : S.max' H ≤ x :=
+H2 _ $ finset.max'_mem _ _
+
+theorem finset.min'_lt_max' {α} [decidable_linear_order α]
   (S : finset α) (H : S ≠ ∅) {i j}
   (H1 : i ∈ S) (H2 : j ∈ S) (H3 : i ≠ j) :
-  S.min' H ≠ S.max' H :=
+  S.min' H < S.max' H :=
 begin
   rcases lt_trichotomy i j with H4 | H4 | H4,
   { have H5 := finset.min'_le S H i H1,
     have H6 := finset.le_max' S H j H2,
-    apply ne_of_lt,
     apply lt_of_le_of_lt H5,
     apply lt_of_lt_of_le H4 H6 },
   { cc },
   { have H5 := finset.min'_le S H j H2,
     have H6 := finset.le_max' S H i H1,
-    apply ne_of_lt,
     apply lt_of_le_of_lt H5,
     apply lt_of_lt_of_le H4 H6 }
 end
@@ -331,14 +343,16 @@ Sym.ext _ _ _ $ λ i, fin.eq_of_veq $ by simp [Sym.to_list]
 
 end perm
 
-def Sym.equiv_0 : Sym 0 ≃ fin (0:ℕ).fact :=
+namespace Sym
+
+def equiv_0 : Sym 0 ≃ fin (0:ℕ).fact :=
 { to_fun    := λ _, ⟨0, dec_trivial⟩,
   inv_fun   := λ _, 1,
-  left_inv  := λ _, Sym.ext _ _ _ $ λ ⟨n, H⟩, by cases H,
+  left_inv  := λ _, ext _ _ _ $ λ ⟨n, H⟩, by cases H,
   right_inv := λ ⟨n, H⟩, fin.eq_of_veq $
     by cases H with H1 H1; [refl, cases H1] }
 
-def Sym.descend (σ : Sym (n+1)) : Sym n :=
+def descend (σ : Sym (n+1)) : Sym n :=
 { to_fun    := λ i, (σ 0).descend (σ i.succ)
     (λ H, by cases i; from nat.no_confusion
       (fin.veq_of_eq (σ.bijective.1 H))),
@@ -349,7 +363,7 @@ def Sym.descend (σ : Sym (n+1)) : Sym n :=
     apply fin.veq_of_eq; simp,
   right_inv := λ i, fin.eq_of_veq $ by simp }
 
-def Sym.ascend (σ : Sym n) (k : fin (n+1)) : Sym (n+1) :=
+def ascend (σ : Sym n) (k : fin (n+1)) : Sym (n+1) :=
 { to_fun    := λ i, if H : i = 0 then k
     else k.ascend $ σ $ i.pred H,
   inv_fun   := λ i, if H : i = k then 0
@@ -373,11 +387,11 @@ def Sym.ascend (σ : Sym n) (k : fin (n+1)) : Sym (n+1) :=
         exact nat.no_confusion H }
     end }
 
-@[simp] lemma Sym.descend_ascend (σ : Sym n) (k : fin (n+1)) :
-  Sym.descend (Sym.ascend σ k) = σ :=
+@[simp] lemma descend_ascend (σ : Sym n) (k : fin (n+1)) :
+  descend (ascend σ k) = σ :=
 begin
   ext i,
-  dsimp [Sym.ascend, Sym.descend],
+  dsimp [ascend, descend],
   have H : i.succ ≠ 0,
   { intro H,
     replace H := fin.veq_of_eq H,
@@ -385,30 +399,30 @@ begin
   simp [H]
 end
 
-def Sym.equiv_succ (ih : Sym n ≃ fin n.fact) :
+def equiv_succ (ih : Sym n ≃ fin n.fact) :
   Sym (n+1) ≃ (fin (n+1) × fin n.fact) :=
-{ to_fun    := λ σ, (σ 0, ih $ Sym.descend σ),
-  inv_fun   := λ F, Sym.ascend (ih.symm F.2) F.1,
-  left_inv  := λ σ, Sym.ext _ _ _ $ λ i, begin
+{ to_fun    := λ σ, (σ 0, ih $ descend σ),
+  inv_fun   := λ F, ascend (ih.symm F.2) F.1,
+  left_inv  := λ σ, ext _ _ _ $ λ i, begin
     dsimp, rw [equiv.inverse_apply_apply ih],
-    dsimp [Sym.descend, Sym.ascend],
+    dsimp [descend, ascend],
     split_ifs, {subst h},
     simp
   end,
   right_inv := λ F, prod.ext
-      (fin.eq_of_veq $ by dsimp [Sym.ascend]; simp) $
+      (fin.eq_of_veq $ by dsimp [ascend]; simp) $
     fin.eq_of_veq $ by simp }
 
-def Sym.equiv : Sym n ≃ fin n.fact :=
-nat.rec_on n Sym.equiv_0 $ λ n ih,
+protected def equiv : Sym n ≃ fin n.fact :=
+nat.rec_on n equiv_0 $ λ n ih,
 calc  Sym (n+1)
-    ≃ (fin (n+1) × fin n.fact) : Sym.equiv_succ ih
+    ≃ (fin (n+1) × fin n.fact) : equiv_succ ih
 ... ≃ fin (n+1).fact : fin_prod
 
 instance : fintype (Sym n) :=
 fintype.of_equiv _ Sym.equiv.symm
 
-theorem Sym.card : fintype.card (Sym n) = nat.fact n :=
+theorem card : fintype.card (Sym n) = nat.fact n :=
 (fintype.of_equiv_card Sym.equiv.symm).trans $
 fintype.card_fin _
 
@@ -418,22 +432,22 @@ nonempty.rec_on (fintype.card_eq.1 $ fintype.card_fin $ fintype.card α) $ λ φ
 ⟨λ x, ⟨λ i, φ.symm (x * φ i), λ i, φ.symm (x⁻¹ * φ i),
   λ i, by simp, λ i, by simp⟩,
 λ x y H, have H1 : _ := congr_fun (equiv.mk.inj H).1 (φ.symm 1), by simpa using H1,
-⟨λ x y, Sym.ext _ _ _ $ λ i, by simp [mul_assoc]⟩⟩
+⟨λ x y, ext _ _ _ $ λ i, by simp [mul_assoc]⟩⟩
 
 
-@[simp] lemma Sym.mul_apply (σ τ : Sym n) (i : fin n) :
+@[simp] lemma mul_apply (σ τ : Sym n) (i : fin n) :
   (σ * τ) i = σ (τ i) :=
 rfl
 
-@[simp] lemma Sym.one_apply (i : fin n) :
+@[simp] lemma one_apply (i : fin n) :
   (1 : Sym n) i = i :=
 rfl
 
-@[simp] lemma Sym.inv_apply (σ : Sym n) (i : fin n) :
+@[simp] lemma inv_apply (σ : Sym n) (i : fin n) :
   σ⁻¹ i = σ.symm i :=
 rfl
 
-def Sym.swap (i j : fin n) : Sym n :=
+def swap (i j : fin n) : Sym n :=
 { to_fun    := λ k, if k = i then j
     else if k = j then i else k,
   inv_fun   := λ k, if k = i then j
@@ -441,25 +455,25 @@ def Sym.swap (i j : fin n) : Sym n :=
   left_inv  := λ k, by dsimp; split_ifs; cc,
   right_inv := λ k, by dsimp; split_ifs; cc }
 
-@[simp] lemma Sym.swap_left (i j : fin n) :
-  Sym.swap i j i = j :=
-by dsimp [Sym.swap]; cc
+@[simp] lemma swap_left (i j : fin n) :
+  swap i j i = j :=
+by dsimp [swap]; cc
 
-@[simp] lemma Sym.swap_right (i j : fin n) :
-  Sym.swap i j j = i :=
-by dsimp [Sym.swap]; split_ifs; cc
+@[simp] lemma swap_right (i j : fin n) :
+  swap i j j = i :=
+by dsimp [swap]; split_ifs; cc
 
-@[simp] lemma Sym.swap_mul_self (i j : fin n) :
-  Sym.swap i j * Sym.swap i j = 1 :=
-Sym.ext _ _ _ $ λ k, by dsimp [Sym.swap]; split_ifs; cc
+@[simp] lemma swap_mul_self (i j : fin n) :
+  swap i j * swap i j = 1 :=
+ext _ _ _ $ λ k, by dsimp [swap]; split_ifs; cc
 
-theorem Sym.swap_comm (i j : fin n) :
-  Sym.swap i j = Sym.swap j i :=
-Sym.ext _ _ _ $ λ k, by dsimp [Sym.swap]; split_ifs; cc
+theorem swap_comm (i j : fin n) :
+  swap i j = swap j i :=
+ext _ _ _ $ λ k, by dsimp [swap]; split_ifs; cc
 
-theorem Sym.swap_canonical (i j : fin n)
+theorem swap_canonical (i j : fin n)
   (H1 H2 : ({i, j} : finset (fin n)) ≠ ∅) :
-  Sym.swap (finset.min' _ H1) (finset.max' _ H2) = Sym.swap i j :=
+  swap (finset.min' _ H1) (finset.max' _ H2) = swap i j :=
 begin
   have H3 := finset.min'_mem _ H1,
   have H4 : finset.min' _ H1 = j ∨ finset.min' _ H1 = i,
@@ -474,7 +488,7 @@ begin
     rw H4 at H7, rw H6 at H8,
     have H9 := le_antisymm H7 H8,
     subst H9 },
-  { rw [H4, H6, Sym.swap_comm] },
+  { rw [H4, H6, swap_comm] },
   { rw [H4, H6] },
   { rw [H4, H6],
     have H7 := finset.min'_le _ H1 j (by simp),
@@ -484,27 +498,27 @@ begin
     subst H9 }
 end
 
-@[simp] theorem Sym.swap_self (i : fin n) :
-  Sym.swap i i = 1 :=
-Sym.ext _ _ _ $ λ k, by dsimp [Sym.swap]; split_ifs; cc
+@[simp] theorem swap_self (i : fin n) :
+  swap i i = 1 :=
+ext _ _ _ $ λ k, by dsimp [swap]; split_ifs; cc
 
-def Sym.support (σ : Sym n) : finset (fin n) :=
+def support (σ : Sym n) : finset (fin n) :=
 finset.filter (λ i, σ i ≠ i) finset.univ
 
-theorem Sym.support_def {σ : Sym n} {i : fin n} :
+theorem support_def {σ : Sym n} {i : fin n} :
   i ∈ σ.support ↔ σ i ≠ i :=
 ⟨λ H, (finset.mem_filter.1 H).2, λ H, finset.mem_filter.2 ⟨finset.mem_univ _, H⟩⟩
 
-def Sym.support_choice (σ : Sym n) (H : σ.support ≠ ∅) :
+def support_choice (σ : Sym n) (H : σ.support ≠ ∅) :
   { i // i ∈ σ.support } :=
 ⟨σ.support.min' H, finset.min'_mem _ _⟩
 
-theorem Sym.support_swap (i j : fin n) (H : i ≠ j) :
-  (Sym.swap i j).support = {i, j} :=
+theorem support_swap {i j : fin n} (H : i ≠ j) :
+  (swap i j).support = {i, j} :=
 begin
   ext k, split,
   { intro H1,
-    simp [Sym.support_def, Sym.swap] at H1,
+    simp [support_def, swap] at H1,
     split_ifs at H1 with h1 h2 h3 h4,
     { subst h1, simp },
     { subst h2, simp },
@@ -513,97 +527,480 @@ begin
     simp at H1,
     cases H1 with H1 H1;
     subst H1;
-    simp [Sym.support_def, Sym.swap, H.symm, H] }
+    simp [support_def, swap, H.symm, H] }
 end
 
-theorem Sym.support_swap_mul {σ : Sym n} {i : fin n}
-  (H : i ∈ σ.support) : (Sym.swap i (σ i) * σ).support < σ.support :=
+theorem support_swap_mul {σ : Sym n} {i : fin n}
+  (H : i ∈ σ.support) : (swap (σ i) i * σ).support < σ.support :=
 begin
   split,
   { intros j h1,
-    simp [Sym.support_def, Sym.swap] at *,
+    simp [support_def, swap] at *,
     split_ifs at h1,
-    { intro h2, rw h2 at h, subst h, cc },
+    { intro h2, rw ← h2 at h, subst h, cc },
     { cc },
     { cc } },
   intro H1,
   specialize H1 H,
-  simp [Sym.support_def, Sym.swap] at H1,
-  apply H1,
-  split_ifs; cc
+  simp [support_def, swap] at H1,
+  apply H1
 end
 
-def Sym.is_valid (L : list (Sym n)) : Prop :=
-∀ τ ∈ L, ∃ i j, i ≠ j ∧ τ = Sym.swap i j
+@[simp] lemma support_one : support (1 : Sym n) = ∅ :=
+finset.eq_empty_of_forall_not_mem $ λ i H,
+support_def.1 H rfl
 
-def Sym.list_swap.aux : has_well_founded (Sym n) :=
-{ r := inv_image (<) Sym.support,
+variable (n)
+structure step : Type :=
+(fst : fin n)
+(snd : fin n)
+(lt  : fst < snd)
+variable {n}
+
+instance : has_mem (fin n) (step n) :=
+⟨λ i s, i = s.1 ∨ i = s.2⟩
+
+@[extensionality] theorem step.ext (s t : step n)
+  (H1 : s.1 = t.1) (H2 : s.2 = t.2) : s = t :=
+by cases s; cases t; congr; assumption
+
+def step.mk' (i j : fin n) (H : i ≠ j) : step n :=
+if h : i < j then ⟨i, j, h⟩ else
+⟨j, i, (eq_or_lt_of_not_lt h).resolve_left H⟩
+
+def step.eval (s : step n) : Sym n :=
+swap s.1 s.2
+
+@[simp] lemma step.eval_def (s : step n) :
+  s.eval = swap s.1 s.2 :=
+rfl
+
+@[simp] lemma step.eval_mk' (i j : fin n) (H : i ≠ j) :
+  (step.mk' i j H).eval = swap i j :=
+by unfold step.mk'; split_ifs; simp [swap_comm]
+
+theorem choice.aux (σ : Sym n)
+  (H : ∃ i j, i ≠ j ∧ σ = swap i j) :
+  σ.support ≠ ∅ :=
+let ⟨i, j, h1, h2⟩ := H in by
+  refine finset.ne_empty_of_mem (_ : j ∈ σ.support);
+  rw [h2, support_swap h1];
+  apply finset.mem_insert_self
+
+def choice (σ : Sym n)
+  (H : ∃ i j, i ≠ j ∧ σ = swap i j) : step n :=
+{ fst := σ.support.min' $ choice.aux _ H,
+  snd := σ.support.max' $ choice.aux _ H,
+  lt  := by rcases H with ⟨i, j, h1, h2⟩; subst h2; dsimp;
+    refine finset.min'_lt_max' _ _ _ _ h1;
+    simp [support_swap h1] }
+
+theorem eval_choice (σ : Sym n)
+  (H : ∃ i j, i ≠ j ∧ σ = swap i j) :
+  (σ.choice H).eval = σ :=
+begin
+  rcases H with ⟨i, j, h1, h2⟩,
+  subst h2, unfold step.eval choice, dsimp,
+  convert swap_canonical i j _ _;
+  simp [support_swap h1]
+end
+
+theorem choice_eval (s : step n)
+  (H : ∃ i j, i ≠ j ∧ s.eval = swap i j) :
+  s.eval.choice H = s :=
+begin
+  ext; dsimp [step.eval, choice],
+  { apply le_antisymm,
+    { apply finset.min'_le,
+      simp [support_swap (ne_of_lt s.3)] },
+    { apply finset.le_min',
+      intros y h1,
+      simp [support_swap (ne_of_lt s.3)] at h1,
+      cases h1; subst h1,
+      apply le_of_lt s.3 } },
+  { apply le_antisymm,
+    { apply finset.max'_le,
+      intros y h1,
+      simp [support_swap (ne_of_lt s.3)] at h1,
+      cases h1; subst h1,
+      apply le_of_lt s.3 },
+    { apply finset.le_max',
+      simp [support_swap (ne_of_lt s.3)] } }
+end
+
+def list_step.aux : has_well_founded (Sym n) :=
+{ r := inv_image (<) support,
   wf := inv_image.wf _ finset.lt_wf }
 
-local attribute [instance] Sym.list_swap.aux
+local attribute [instance] list_step.aux
 attribute [elab_as_eliminator] well_founded.fix
 attribute [elab_as_eliminator] well_founded.induction
 
-def Sym.list_swap (σ : Sym n) : list (Sym n) :=
-by refine well_founded.fix Sym.list_swap.aux.wf _ σ; from
+def list_step (σ : Sym n) : list (step n) :=
+by refine well_founded.fix list_step.aux.wf _ σ; from
 λ σ ih, if H : σ.support = ∅ then []
   else let ⟨i, hi⟩ := σ.support_choice H in
-    (Sym.swap i (σ i)) :: ih (Sym.swap i (σ i) * σ) (Sym.support_swap_mul hi)
+    step.mk' (σ i) i (support_def.1 hi)
+    :: ih (swap (σ i) i * σ) (support_swap_mul hi)
 
-theorem Sym.list_swap_valid (σ : Sym n) :
-  Sym.is_valid σ.list_swap :=
-well_founded.induction Sym.list_swap.aux.wf σ $ λ σ ih τ H,
+@[simp] lemma list_step_prod (σ : Sym n) :
+  (σ.list_step.map step.eval).prod = σ :=
+well_founded.induction list_step.aux.wf σ $ λ σ ih,
 begin
-  dsimp [Sym.list_swap] at H,
-  rw [well_founded.fix_eq] at H,
-  split_ifs at H, { cases H },
-  cases Sym.support_choice σ h with i hi,
-  unfold Sym.list_swap._match_1 at H,
-  cases H with H H,
-  { subst H,
-    rw [Sym.support_def] at hi,
-    exact ⟨_, _, hi.symm, rfl⟩ },
-  exact ih _ (Sym.support_swap_mul hi) τ H
-end
-
-theorem Sym.list_swap_prod (σ : Sym n) :
-  σ.list_swap.prod = σ :=
-well_founded.induction Sym.list_swap.aux.wf σ $ λ σ ih,
-begin
-  dsimp [Sym.list_swap],
+  dsimp [list_step],
   rw [well_founded.fix_eq],
   split_ifs,
   { ext, by_contra H,
     suffices : i ∈ (∅ : finset (fin n)),
     { simp at this, cc },
-    rw [← h, Sym.support_def],
+    rw [← h, support_def],
     exact mt eq.symm H },
-  cases Sym.support_choice σ h with i hi,
-  unfold Sym.list_swap._match_1,
-  specialize ih _ (Sym.support_swap_mul hi),
-  dsimp [Sym.list_swap] at ih,
-  rw [list.prod_cons, ih, ← mul_assoc, Sym.swap_mul_self, one_mul]
+  cases support_choice σ h with i hi,
+  unfold list_step._match_1,
+  specialize ih _ (support_swap_mul hi),
+  dsimp [list_step] at ih,
+  rw [list.map_cons, list.prod_cons, ih, ← mul_assoc],
+  rw [step.eval_mk', swap_mul_self, one_mul]
 end
 
-theorem Sym.is_valid.choice.aux1 (L : list (Sym n))
-  (H : Sym.is_valid L) (τ) (H1 : τ ∈ L) :
-  τ.support ≠ ∅ :=
-let ⟨i, j, h1, h2⟩ := H τ H1 in by
-  refine finset.ne_empty_of_mem (_ : j ∈ τ.support);
-  rw [h2, Sym.support_swap _ _ h1];
-  apply finset.mem_insert_self
+theorem mem_step_iff_mem_support (s : step n) (i : fin n) :
+  i ∈ s ↔ i ∈ s.eval.support :=
+begin
+  unfold step.eval,
+  simp [support_swap (ne_of_lt s.3)],
+  rw [or_comm], refl
+end
 
-def Sym.is_valid.choice (L : list (Sym n))
-  (H : Sym.is_valid L) (τ) (H1 : τ ∈ L) :
-  { i : fin n × fin n // i.1 ≠ i.2 ∧ τ = Sym.swap i.1 i.2 } :=
-⟨(τ.support.min' $ Sym.is_valid.choice.aux1 L H τ H1,
-τ.support.max' $ Sym.is_valid.choice.aux1 L H τ H1),
-by rcases H τ H1 with ⟨i, j, h1, h2⟩; subst h2; dsimp;
-  refine finset.min'_ne_max' _ _ _ _ h1;
-  simp [Sym.support_swap _ _ h1],
-by rcases H τ H1 with ⟨i, j, h1, h2⟩; subst h2; dsimp;
-  convert (Sym.swap_canonical i j _ _).symm;
-  simp [Sym.support_swap _ _ h1]⟩
+theorem support_eq_of_mul_eq_one {σ τ : Sym n} (H : σ * τ = 1) :
+  σ.support = τ.support :=
+begin
+  ext i, simp [support_def, not_iff_not],
+  rw [eq_comm, iff.comm],
+  convert equiv.symm_apply_eq,
+  symmetry,
+  rw [equiv.symm_apply_eq, ← mul_apply, H, one_apply],
+end
+
+theorem of_mem_mul_support {σ τ : Sym n} {i}
+  (H : i ∈ (σ * τ).support) :
+  i ∈ σ.support ∨ i ∈ τ.support :=
+by_contradiction $ λ H2,
+by simp [support_def, not_or_distrib] at H H2;
+simp [H2] at H; cc
+
+theorem of_not_mem_mul_support {σ τ : Sym n} {i}
+  (H : i ∉ (σ * τ).support) :
+  i ∈ σ.support ↔ i ∈ τ.support :=
+begin
+  simp [support_def] at H ⊢,
+  split,
+  { intros H2 H3, rw H3 at H, cc },
+  { intros H2 H3, rw ← H3 at H,
+    replace H := σ.bijective.1 H,
+    rw H3 at H, cc }
+end
+
+theorem not_mem_mul_support {σ τ : Sym n} {i}
+  (H1 : i ∉ σ.support) (H2 : i ∉ τ.support) :
+  i ∉ (σ * τ).support :=
+begin
+  simp [support_def] at H1 H2 ⊢,
+  rw [H2, H1]
+end
+
+@[simp] lemma mem_mk' {i j k : fin n} (H : i ≠ j) :
+  k ∈ step.mk' i j H ↔ k = i ∨ k = j :=
+begin
+  unfold step.mk',
+  split_ifs,
+  { refl },
+  { apply or_comm }
+end
+
+-- (ab)(cd) = (cd)(ab)
+theorem sgn_aux5 (s t : step n)
+  (H1 : s.1 ≠ t.1) (H2 : s.1 ≠ t.2)
+  (H3 : s.2 ≠ t.1) (H4 : s.2 ≠ t.2) :
+  s.eval * t.eval = t.eval * s.eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  dsimp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+-- (ab)(ac) = (bc)(ab)
+theorem sgn_aux4a (s t : step n)
+  (H1 : s.1 = t.1) (H4 : s.2 ≠ t.2) :
+  s.eval * t.eval = (step.mk' s.2 t.2 H4).eval * s.eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  simp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+-- (ab)(ca) = (cb)(ab)
+theorem sgn_aux4b (s t : step n) (H1 : s.1 = t.2)
+  (H2 : t.1 < s.2) :
+  s.eval * t.eval = (⟨t.1, s.2, H2⟩ : step n).eval * s.eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  have := ne_of_lt H2,
+  dsimp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+-- (ab)(ac) = (ac)(bc)
+theorem sgn_aux4c (s t : step n)
+  (H1 : s.1 = t.1) (H4 : s.2 ≠ t.2) :
+  s.eval * t.eval = t.eval * (step.mk' s.2 t.2 H4).eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  simp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+-- (ab)(ca) = (ca)(cb)
+theorem sgn_aux4d (s t : step n)
+  (H1 : s.1 = t.2) (H4 : t.1 < s.2) :
+  s.eval * t.eval = t.eval * (⟨t.1, s.2, H4⟩ : step n).eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  have := ne_of_lt H4,
+  simp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+-- (ab)(bc) = (bc)(ac)
+theorem sgn_aux3a (s t : step n) (H1 : s.2 = t.1)
+  (H2 : s.1 < t.2) :
+  s.eval * t.eval = t.eval * (⟨s.1, t.2, H2⟩ : step n).eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  have := ne_of_lt H2,
+  dsimp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+-- (ab)(cb) = (cb)(ac)
+theorem sgn_aux3b (s t : step n) (H1 : s.2 = t.2)
+  (H2 : s.1 ≠ t.1) :
+  s.eval * t.eval = t.eval * (step.mk' s.1 t.1 H2).eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  simp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+-- (ab)(bc) = (ac)(ab)
+theorem sgn_aux3c (s t : step n) (H1 : s.2 = t.1)
+  (H2 : s.1 < t.2) :
+  s.eval * t.eval = (⟨s.1, t.2, H2⟩ : step n).eval * s.eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  have := ne_of_lt H2,
+  dsimp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+-- (ab)(cb) = (ac)(ab)
+theorem sgn_aux3d (s t : step n) (H1 : s.2 = t.2)
+  (H2 : s.1 ≠ t.1) :
+  s.eval * t.eval = (step.mk' s.1 t.1 H2).eval * s.eval :=
+begin
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  simp [swap], ext k,
+  dsimp at *,
+  split_ifs; cc
+end
+
+theorem sgn_aux2 (s t : step n) (i) (H : i ∈ s) :
+  s = t ∨ ∃ s' t' : step n, s.eval * t.eval = s'.eval * t'.eval
+    ∧ i ∉ s' ∧ i ∈ t' :=
+begin
+  cases H with H H; subst H,
+  { by_cases H2 : s.1 = t.1,
+    { by_cases H3 : s.2 = t.2,
+      { left, ext; assumption },
+      right, -- (ab)(ac) = (bc)(ab)
+      refine ⟨step.mk' s.2 t.2 H3, s, _, _⟩,
+      { exact sgn_aux4a _ _ H2 _ },
+      rw [mem_mk'],
+      exact ⟨λ H, or.cases_on H
+        (ne_of_lt s.3) (H2.symm ▸ (ne_of_lt t.3)),
+      or.inl rfl⟩ },
+    right,
+    by_cases H3 : s.1 = t.2,
+    { -- (ab)(ca) = (cb)(ab)
+      have H4 : t.1 < s.2 := lt_trans t.3 (H3 ▸ s.3),
+      refine ⟨⟨t.1, s.2, H4⟩, s, _, _⟩,
+      { exact sgn_aux4b _ _ H3 _ },
+      exact ⟨λ H, or.cases_on H
+        H2 (ne_of_lt s.3),
+      or.inl rfl⟩ },
+    by_cases H4 : s.2 = t.1,
+    { -- (ab)(bc) = (bc)(ac)
+      have H5 : s.1 < t.2 := lt_trans s.3 (H4.symm ▸ t.3),
+      refine ⟨t, ⟨s.1, t.2, H5⟩, _, _⟩,
+      { exact sgn_aux3a _ _ H4 _ },
+      exact ⟨λ H, or.cases_on H
+        H2 (ne_of_lt H5),
+      or.inl rfl⟩ },
+    by_cases H5 : s.2 = t.2,
+    { -- (ab)(cb) = (cb)(ac)
+      refine ⟨t, step.mk' s.1 t.1 H2, _, _⟩,
+      { exact sgn_aux3b _ _ H5 _ },
+      exact ⟨λ H, or.cases_on H
+        H2 H3,
+      by simp⟩ },
+    -- (ab)(cd) = (cd)(ab)
+    refine ⟨t, s, _, _⟩,
+    { exact sgn_aux5 _ _ H2 H3 H4 H5 },
+    exact ⟨λ H, or.cases_on H
+      H2 H3,
+    or.inl rfl⟩ },
+  by_cases H2 : s.1 = t.1,
+  { by_cases H3 : s.2 = t.2,
+    { left, ext; assumption },
+    right, -- (ab)(ac) = (ac)(bc)
+    refine ⟨t, step.mk' s.2 t.2 H3, _, _⟩,
+    { exact sgn_aux4c _ _ H2 _ },
+    rw [mem_mk'],
+    exact ⟨λ H, or.cases_on H
+      (H2 ▸ ne_of_gt s.3) H3,
+    or.inl rfl⟩ },
+  right,
+  by_cases H3 : s.1 = t.2,
+  { -- (ab)(ca) = (ca)(cb)
+    have H4 : t.1 < s.2 := lt_trans t.3 (H3 ▸ s.3),
+    refine ⟨t, ⟨t.1, s.2, H4⟩, _, _⟩,
+    { exact sgn_aux4d _ _ H3 _ },
+    exact ⟨λ H, or.cases_on H
+      (ne_of_gt H4) (H3 ▸ ne_of_gt s.3),
+    or.inr rfl⟩ },
+  by_cases H4 : s.2 = t.1,
+  { -- (ab)(bc) = (ac)(ab)
+    have H5 : s.1 < t.2 := lt_trans s.3 (H4.symm ▸ t.3),
+    refine ⟨⟨s.1, t.2, H5⟩, s, _, _⟩,
+    { exact sgn_aux3c _ _ H4 _ },
+    exact ⟨λ H, or.cases_on H
+      (ne_of_gt s.3) (H4.symm ▸ ne_of_lt t.3),
+    or.inr rfl⟩ },
+  by_cases H5 : s.2 = t.2,
+  { -- (ab)(cb) = (ac)(ab)
+    refine ⟨step.mk' s.1 t.1 H2, s, _, _⟩,
+    { exact sgn_aux3d _ _ H5 _ },
+    rw [mem_mk'],
+    exact ⟨λ H, or.cases_on H
+      (ne_of_gt s.3) (H5.symm ▸ ne_of_gt t.3),
+    or.inr rfl⟩ },
+  refine ⟨t, s, _, _⟩,
+  { exact sgn_aux5 _ _ H2 H3 H4 H5 },
+  exact ⟨λ H, or.cases_on H
+    H4 H5,
+  or.inr rfl⟩
+end
+
+theorem sgn_aux (L1 : list (step n)) (s : step n) (L2 : list (step n)) (i : fin n)
+  (H1 : (L1.map step.eval).prod * s.eval * (L2.map step.eval).prod = 1)
+  (H2 : i ∈ s) (H3 : i ∉ (L1.map step.eval).prod.support) :
+  ∃ (L : list (step n)),
+    (L.map step.eval).prod = 1
+    ∧ L.length + 2 = L1.length + 1 + L2.length :=
+begin
+  induction L2 with hd tl ih generalizing L1 s,
+  { simp at H1,
+    simp [mem_step_iff_mem_support] at H2,
+    rw support_eq_of_mul_eq_one H1 at H3,
+    cc },
+  simp [mul_assoc] at H1,
+  simp [mem_step_iff_mem_support] at H2,
+  have H4 := H3,
+  rw [support_eq_of_mul_eq_one H1] at H4,
+  replace H4 := of_not_mem_mul_support H4,
+  replace H4 := H4.1 H2,
+  rw [← step.eval_def, ← mem_step_iff_mem_support] at H2,
+  rcases sgn_aux2 s hd i H2 with H5 | ⟨s', t', H5, H6, H7⟩,
+  { subst H5,
+    rw [← mul_assoc (swap s.1 s.2), swap_mul_self, one_mul] at H1,
+    rw [← list.prod_append, ← list.map_append] at H1,
+    refine ⟨_, H1, _⟩,
+    simp, unfold bit0, ac_refl },
+  specialize ih (L1 ++ [s']) t' _ H7 _,
+  rcases ih with ⟨L, H8, H9⟩,
+  refine ⟨L, H8, _⟩,
+  { simp [H9] },
+  { simp at H5 ⊢,
+    rw [mul_assoc (L1.map step.eval).prod, ← H5],
+    simpa [mul_assoc] using H1 },
+  simpa using not_mem_mul_support H3 _,
+  simpa [mem_step_iff_mem_support] using H6
+end
+
+theorem length_even_of_prod_one (L : list (step n))
+  (H : (L.map step.eval).prod = 1) :
+  L.length % 2 = 0 :=
+begin
+  generalize H1 : L.length = k,
+  revert L,
+  apply nat.strong_induction_on k,
+  intros k ih L H H1,
+  cases k with k, { refl },
+  cases k with k,
+  { exfalso,
+    rw list.length_eq_one at H1,
+    cases H1 with s H2,
+    subst H2,
+    replace H := congr_arg support H,
+    simp [support_swap (ne_of_lt s.3)] at H,
+    exact H },
+  cases L with hd tl, { simp at H1, injections },
+  rcases sgn_aux [] hd tl hd.1 _ (or.inl rfl) _ with ⟨L, H2, H3⟩,
+  specialize ih k _ L H2 _,
+  change (k + 2) % 2 = 0,
+  { rw [nat.add_mod_right, ih] },
+  { constructor, constructor },
+  { simp at H1 H3,
+    rw ← H3 at H1,
+    exact nat.succ_inj (nat.succ_inj H1) },
+  { simpa using H },
+  simp
+end
+
+theorem length_mod_two_eq (L1 L2 : list (step n))
+  (H : (L1.map step.eval).prod = (L2.map step.eval).prod) :
+  L1.length % 2 = L2.length % 2 :=
+have H1 : (L2.map step.eval).reverse.prod = (L2.map step.eval).prod⁻¹,
+  from list.rec_on L2 (by simp) $ λ hd tl ih,
+    by simp [ih, eq_inv_iff_mul_eq_one],
+have H2 : _,
+  from length_even_of_prod_one (L1 ++ L2.reverse) $
+    by simp [H1, H],
+have H3 : 2 ∣ L1.length + L2.length,
+  by simpa [nat.dvd_iff_mod_eq_zero] using H2,
+calc  L1.length % 2
+    = (L1.length + L2.length + L2.length) % 2 :
+  by rw [add_assoc, ← mul_two, nat.add_mul_mod_self_right]
+... = L2.length % 2 :
+  by cases H3 with k H4; rw [H4, add_comm, nat.add_mul_mod_self_left]
+
+end Sym
 
 section mu2
 
@@ -643,3 +1040,28 @@ have H : (-1 : mu2) ^ 2 = 1, from rfl,
 by rw [← nat.mod_add_div n 2, pow_add, pow_mul, H, one_pow, mul_one, nat.mod_add_div n 2]
 
 end mu2
+
+namespace Sym
+
+def sgn (σ : Sym n) : mu2 :=
+(-1) ^ σ.list_step.length
+
+instance sgn.is_group_hom : is_group_hom (@sgn n) :=
+begin
+  constructor,
+  intros σ τ,
+  unfold sgn,
+  rw [← pow_add, ← list.length_append],
+  rw [mu2.neg_one_pow, eq_comm, mu2.neg_one_pow],
+  refine congr_arg _ _,
+  apply length_mod_two_eq,
+  simp
+end
+
+theorem sgn_step (s : step n) :
+  sgn s.eval = -1 :=
+suffices s.eval.list_step.length % 2 = [s].length % 2,
+  by unfold sgn; rw [mu2.neg_one_pow, this]; refl,
+length_mod_two_eq _ _ $ by simp
+
+end Sym
