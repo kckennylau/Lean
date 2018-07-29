@@ -1,4 +1,4 @@
-import data.fintype data.equiv.basic
+import data.fintype data.equiv.basic group_theory.subgroup
 
 namespace list
 
@@ -571,13 +571,13 @@ if h : i < j then ⟨i, j, h⟩ else
 def step.eval (s : step n) : Sym n :=
 swap s.1 s.2
 
-@[simp] lemma step.eval_def (s : step n) :
-  s.eval = swap s.1 s.2 :=
-rfl
+@[simp] lemma step.eval_mul_self (s : step n) :
+  s.eval * s.eval = 1 :=
+by simp [step.eval]
 
 @[simp] lemma step.eval_mk' (i j : fin n) (H : i ≠ j) :
   (step.mk' i j H).eval = swap i j :=
-by unfold step.mk'; split_ifs; simp [swap_comm]
+by unfold step.mk'; split_ifs; simp [step.eval, swap_comm]
 
 theorem choice.aux (σ : Sym n)
   (H : ∃ i j, i ≠ j ∧ σ = swap i j) :
@@ -725,7 +725,7 @@ theorem sgn_aux5 (s t : step n)
 begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
-  dsimp [swap], ext k,
+  dsimp [step.eval, swap], ext k,
   dsimp at *,
   split_ifs; cc
 end
@@ -737,6 +737,7 @@ theorem sgn_aux4a (s t : step n)
 begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
+  unfold step.eval step.mk',
   simp [swap], ext k,
   dsimp at *,
   split_ifs; cc
@@ -750,7 +751,7 @@ begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
   have := ne_of_lt H2,
-  dsimp [swap], ext k,
+  dsimp [step.eval, swap], ext k,
   dsimp at *,
   split_ifs; cc
 end
@@ -762,6 +763,7 @@ theorem sgn_aux4c (s t : step n)
 begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
+  unfold step.eval step.mk',
   simp [swap], ext k,
   dsimp at *,
   split_ifs; cc
@@ -775,7 +777,7 @@ begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
   have := ne_of_lt H4,
-  simp [swap], ext k,
+  simp [step.eval, swap], ext k,
   dsimp at *,
   split_ifs; cc
 end
@@ -788,7 +790,7 @@ begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
   have := ne_of_lt H2,
-  dsimp [swap], ext k,
+  dsimp [step.eval, swap], ext k,
   dsimp at *,
   split_ifs; cc
 end
@@ -800,6 +802,7 @@ theorem sgn_aux3b (s t : step n) (H1 : s.2 = t.2)
 begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
+  unfold step.eval step.mk',
   simp [swap], ext k,
   dsimp at *,
   split_ifs; cc
@@ -813,7 +816,7 @@ begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
   have := ne_of_lt H2,
-  dsimp [swap], ext k,
+  dsimp [step.eval, swap], ext k,
   dsimp at *,
   split_ifs; cc
 end
@@ -825,6 +828,7 @@ theorem sgn_aux3d (s t : step n) (H1 : s.2 = t.2)
 begin
   have := ne_of_lt s.3,
   have := ne_of_lt t.3,
+  unfold step.eval step.mk',
   simp [swap], ext k,
   dsimp at *,
   split_ifs; cc
@@ -935,10 +939,10 @@ begin
   rw [support_eq_of_mul_eq_one H1] at H4,
   replace H4 := of_not_mem_mul_support H4,
   replace H4 := H4.1 H2,
-  rw [← step.eval_def, ← mem_step_iff_mem_support] at H2,
+  rw [← mem_step_iff_mem_support] at H2,
   rcases sgn_aux2 s hd i H2 with H5 | ⟨s', t', H5, H6, H7⟩,
   { subst H5,
-    rw [← mul_assoc (swap s.1 s.2), swap_mul_self, one_mul] at H1,
+    rw [← mul_assoc s.eval, step.eval_mul_self, one_mul] at H1,
     rw [← list.prod_append, ← list.map_append] at H1,
     refine ⟨_, H1, _⟩,
     simp, unfold bit0, ac_refl },
@@ -968,7 +972,7 @@ begin
     cases H1 with s H2,
     subst H2,
     replace H := congr_arg support H,
-    simp [support_swap (ne_of_lt s.3)] at H,
+    simp [step.eval, support_swap (ne_of_lt s.3)] at H,
     exact H },
   cases L with hd tl, { simp at H1, injections },
   rcases sgn_aux [] hd tl hd.1 _ (or.inl rfl) _ with ⟨L, H2, H3⟩,
@@ -1002,14 +1006,12 @@ calc  L1.length % 2
 
 end Sym
 
-section mu2
-
 @[derive decidable_eq]
 inductive mu2 : Type
 | plus_one : mu2
 | minus_one : mu2
 
-open mu2
+namespace mu2
 
 definition neg : mu2 → mu2
 | plus_one := minus_one
@@ -1032,12 +1034,30 @@ instance : fintype mu2 :=
 { elems := {1, -1},
   complete := λ x, mu2.cases_on x (or.inr $ or.inl rfl) (or.inl rfl) }
 
-theorem mu2.card : fintype.card mu2 = 2 :=
+theorem card : fintype.card mu2 = 2 :=
 rfl
 
-theorem mu2.neg_one_pow {n} : (-1 : mu2) ^ n = (-1 : mu2) ^ (n%2) :=
+theorem neg_one_pow {n} : (-1 : mu2) ^ n = (-1 : mu2) ^ (n%2) :=
 have H : (-1 : mu2) ^ 2 = 1, from rfl,
 by rw [← nat.mod_add_div n 2, pow_add, pow_mul, H, one_pow, mul_one, nat.mod_add_div n 2]
+
+@[simp] lemma mul_self_eq_one (x : mu2) : x * x = 1 :=
+by cases x; refl
+
+@[simp] lemma inv_eq_self (x : mu2) : x⁻¹ = x :=
+rfl
+
+@[simp] protected lemma mul_neg_one (x : mu2) : x * -1 = -x :=
+by cases x; refl
+
+@[simp] protected lemma neg_one_mul (x : mu2) : -1 * x = -x :=
+by cases x; refl
+
+@[simp] lemma neg_mul_self (x : mu2) : -x * x = -1 :=
+by cases x; refl
+
+@[simp] lemma mul_neg (x y : mu2) : x * -y = -x * y :=
+by cases x; cases y; refl
 
 end mu2
 
@@ -1058,10 +1078,78 @@ begin
   simp
 end
 
-theorem sgn_step (s : step n) :
+@[simp] lemma sgn_step (s : step n) :
   sgn s.eval = -1 :=
 suffices s.eval.list_step.length % 2 = [s].length % 2,
   by unfold sgn; rw [mu2.neg_one_pow, this]; refl,
 length_mod_two_eq _ _ $ by simp
 
+@[simp] lemma sgn_mul (σ τ : Sym n) :
+  sgn (σ * τ) = sgn σ * sgn τ :=
+is_group_hom.mul sgn _ _
+
+@[simp] lemma sgn_one :
+  sgn (1 : Sym n) = 1 :=
+is_group_hom.one sgn
+
+@[simp] lemma sgn_inv (σ : Sym n) :
+  sgn σ⁻¹ = sgn σ :=
+is_group_hom.inv sgn _
+
+def eq_sgn_aux4 (s t : step n) : Sym n :=
+swap (swap s.1 t.1 s.2) t.2 * swap s.1 t.1
+
+theorem eq_sgn_aux3 (s t : step n) :
+  eq_sgn_aux4 s t s.1 = t.1 :=
+begin
+  dsimp [eq_sgn_aux4, swap],
+  have := ne_of_lt s.3,
+  have := ne_of_lt t.3,
+  simp, split_ifs; cc
+end
+
+theorem eq_sgn_aux2 (s t : step n) :
+  eq_sgn_aux4 s t s.2 = t.2 :=
+begin
+  dsimp [eq_sgn_aux4, swap],
+  simp
+end
+
+theorem eq_sgn_aux (s t : step n) :
+  eq_sgn_aux4 s t * s.eval * (eq_sgn_aux4 s t)⁻¹ = t.eval :=
+begin
+  ext k,
+  by_cases H1 : k = t.1,
+  { subst H1,
+    dsimp [step.eval],
+    simp [equiv.symm_apply_eq.2 (eq_sgn_aux3 s t).symm, eq_sgn_aux2] },
+  by_cases H2 : k = t.2,
+  { subst H2,
+    dsimp [step.eval],
+    simp [equiv.symm_apply_eq.2 (eq_sgn_aux2 s t).symm, eq_sgn_aux3] },
+  dsimp [step.eval, swap],
+  simp [H1, H2, eq_sgn_aux2, eq_sgn_aux3]
+end
+
+theorem eq_sgn (f : Sym n → mu2) [is_group_hom f]
+  (s : step n) (H1 : f s.eval = -1) (σ : Sym n) :
+  f σ = sgn σ :=
+begin
+  have H2 : ∀ t : step n, f t.eval = -1,
+  { intro t,
+    rw [← eq_sgn_aux s t],
+    simp [is_group_hom.mul f, is_group_hom.inv f, H1] },
+  have H3 := list_step_prod σ,
+  revert H3, generalize : list_step σ = L, intro H3, subst H3,
+  induction L with hd tl ih, { simp [is_group_hom.one f] },
+  simp [is_group_hom.mul f, ih, H2]
+end
+
 end Sym
+
+variable (n)
+def Alt : Type :=
+is_group_hom.ker (@Sym.sgn n)
+
+instance : group (Alt n) :=
+by unfold Alt; apply_instance
