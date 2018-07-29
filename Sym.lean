@@ -551,11 +551,17 @@ finset.eq_empty_of_forall_not_mem $ λ i H,
 support_def.1 H rfl
 
 variable (n)
+@[derive decidable_eq]
 structure step : Type :=
 (fst : fin n)
 (snd : fin n)
 (lt  : fst < snd)
 variable {n}
+
+instance step.fintype : fintype (step n) :=
+@fintype.of_surjective { i : fin n × fin n // i.1 < i.2 } _ _ _
+  (λ i, (⟨i.1.1, i.1.2, i.2⟩ : step n)) $ λ s,
+⟨⟨(s.1, s.2), s.3⟩, by cases s; refl⟩
 
 instance : has_mem (fin n) (step n) :=
 ⟨λ i s, i = s.1 ∨ i = s.2⟩
