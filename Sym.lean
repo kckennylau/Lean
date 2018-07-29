@@ -207,6 +207,55 @@ have H : subrelation (@has_lt.lt (finset α) _)
   from λ x y hxy, finset.card_lt_card hxy,
 subrelation.wf H $ inv_image.wf _ $ nat.lt_wf
 
+def finset.min' {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅) : α :=
+@option.get _ S.min $
+  let ⟨k, hk⟩ := finset.exists_mem_of_ne_empty H in
+  let ⟨b, hb⟩ := finset.min_of_mem hk in by simp at hb; simp [hb]
+
+theorem finset.min'_mem {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅) : S.min' H ∈ S :=
+finset.mem_of_min $ by simp [finset.min']
+
+theorem finset.min'_le {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅)
+  (x) (H2 : x ∈ S) : S.min' H ≤ x :=
+finset.le_min_of_mem H2 $ option.get_mem _
+
+def finset.max' {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅) : α :=
+@option.get _ S.max $
+  let ⟨k, hk⟩ := finset.exists_mem_of_ne_empty H in
+  let ⟨b, hb⟩ := finset.max_of_mem hk in by simp at hb; simp [hb]
+
+theorem finset.max'_mem {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅) : S.max' H ∈ S :=
+finset.mem_of_max $ by simp [finset.max']
+
+theorem finset.le_max' {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅)
+  (x) (H2 : x ∈ S) : x ≤ S.max' H :=
+finset.le_max_of_mem H2 $ option.get_mem _
+
+theorem finset.min'_ne_max' {α} [decidable_linear_order α]
+  (S : finset α) (H : S ≠ ∅) {i j}
+  (H1 : i ∈ S) (H2 : j ∈ S) (H3 : i ≠ j) :
+  S.min' H ≠ S.max' H :=
+begin
+  rcases lt_trichotomy i j with H4 | H4 | H4,
+  { have H5 := finset.min'_le S H i H1,
+    have H6 := finset.le_max' S H j H2,
+    apply ne_of_lt,
+    apply lt_of_le_of_lt H5,
+    apply lt_of_lt_of_le H4 H6 },
+  { cc },
+  { have H5 := finset.min'_le S H j H2,
+    have H6 := finset.le_max' S H i H1,
+    apply ne_of_lt,
+    apply lt_of_le_of_lt H5,
+    apply lt_of_lt_of_le H4 H6 }
+end
+
 end miscellaneous
 
 
@@ -408,6 +457,33 @@ theorem Sym.swap_comm (i j : fin n) :
   Sym.swap i j = Sym.swap j i :=
 Sym.ext _ _ _ $ λ k, by dsimp [Sym.swap]; split_ifs; cc
 
+theorem Sym.swap_canonical (i j : fin n)
+  (H1 H2 : ({i, j} : finset (fin n)) ≠ ∅) :
+  Sym.swap (finset.min' _ H1) (finset.max' _ H2) = Sym.swap i j :=
+begin
+  have H3 := finset.min'_mem _ H1,
+  have H4 : finset.min' _ H1 = j ∨ finset.min' _ H1 = i,
+  { simpa using H3 },
+  have H5 := finset.max'_mem _ H2,
+  have H6 : finset.max' _ H2 = j ∨ finset.max' _ H2 = i,
+  { simpa using H5 },
+  cases H4; cases H6,
+  { rw [H4, H6],
+    have H7 := finset.min'_le _ H1 i (by simp),
+    have H8 := finset.le_max' _ H2 i (by simp),
+    rw H4 at H7, rw H6 at H8,
+    have H9 := le_antisymm H7 H8,
+    subst H9 },
+  { rw [H4, H6, Sym.swap_comm] },
+  { rw [H4, H6] },
+  { rw [H4, H6],
+    have H7 := finset.min'_le _ H1 j (by simp),
+    have H8 := finset.le_max' _ H2 j (by simp),
+    rw H4 at H7, rw H6 at H8,
+    have H9 := le_antisymm H7 H8,
+    subst H9 }
+end
+
 @[simp] theorem Sym.swap_self (i : fin n) :
   Sym.swap i i = 1 :=
 Sym.ext _ _ _ $ λ k, by dsimp [Sym.swap]; split_ifs; cc
@@ -421,10 +497,24 @@ theorem Sym.support_def {σ : Sym n} {i : fin n} :
 
 def Sym.support_choice (σ : Sym n) (H : σ.support ≠ ∅) :
   { i // i ∈ σ.support } :=
-⟨@option.get _ σ.support.min $
-  let ⟨k, hk⟩ := finset.exists_mem_of_ne_empty H in
-  let ⟨b, hb⟩ := finset.min_of_mem hk in by simp at hb; simp [hb],
-finset.mem_of_min $ by simp⟩
+⟨σ.support.min' H, finset.min'_mem _ _⟩
+
+theorem Sym.support_swap (i j : fin n) (H : i ≠ j) :
+  (Sym.swap i j).support = {i, j} :=
+begin
+  ext k, split,
+  { intro H1,
+    simp [Sym.support_def, Sym.swap] at H1,
+    split_ifs at H1 with h1 h2 h3 h4,
+    { subst h1, simp },
+    { subst h2, simp },
+    cc },
+  { intro H1,
+    simp at H1,
+    cases H1 with H1 H1;
+    subst H1;
+    simp [Sym.support_def, Sym.swap, H.symm, H] }
+end
 
 theorem Sym.support_swap_mul {σ : Sym n} {i : fin n}
   (H : i ∈ σ.support) : (Sym.swap i (σ i) * σ).support < σ.support :=
@@ -495,6 +585,26 @@ begin
   rw [list.prod_cons, ih, ← mul_assoc, Sym.swap_mul_self, one_mul]
 end
 
+theorem Sym.is_valid.choice.aux1 (L : list (Sym n))
+  (H : Sym.is_valid L) (τ) (H1 : τ ∈ L) :
+  τ.support ≠ ∅ :=
+let ⟨i, j, h1, h2⟩ := H τ H1 in by
+  refine finset.ne_empty_of_mem (_ : j ∈ τ.support);
+  rw [h2, Sym.support_swap _ _ h1];
+  apply finset.mem_insert_self
+
+def Sym.is_valid.choice (L : list (Sym n))
+  (H : Sym.is_valid L) (τ) (H1 : τ ∈ L) :
+  { i : fin n × fin n // i.1 ≠ i.2 ∧ τ = Sym.swap i.1 i.2 } :=
+⟨(τ.support.min' $ Sym.is_valid.choice.aux1 L H τ H1,
+τ.support.max' $ Sym.is_valid.choice.aux1 L H τ H1),
+by rcases H τ H1 with ⟨i, j, h1, h2⟩; subst h2; dsimp;
+  refine finset.min'_ne_max' _ _ _ _ h1;
+  simp [Sym.support_swap _ _ h1],
+by rcases H τ H1 with ⟨i, j, h1, h2⟩; subst h2; dsimp;
+  convert (Sym.swap_canonical i j _ _).symm;
+  simp [Sym.support_swap _ _ h1]⟩
+
 section mu2
 
 @[derive decidable_eq]
@@ -527,5 +637,9 @@ instance : fintype mu2 :=
 
 theorem mu2.card : fintype.card mu2 = 2 :=
 rfl
+
+theorem mu2.neg_one_pow {n} : (-1 : mu2) ^ n = (-1 : mu2) ^ (n%2) :=
+have H : (-1 : mu2) ^ 2 = 1, from rfl,
+by rw [← nat.mod_add_div n 2, pow_add, pow_mul, H, one_pow, mul_one, nat.mod_add_div n 2]
 
 end mu2
