@@ -1151,6 +1151,107 @@ begin
   simp [is_group_hom.mul f, ih, H2]
 end
 
+section inversions
+
+def step.map (s : step n) (σ : Sym n) : step n :=
+step.mk' (σ s.1) (σ s.2) $ λ H, ne_of_lt s.3 $
+σ.bijective.1 H
+
+@[simp] lemma step.map_map_inv (s : step n) (σ : Sym n) :
+  (s.map σ).map σ⁻¹ = s :=
+begin
+  unfold step.map step.mk',
+  by_cases H1 : σ s.1 < σ s.2,
+  { rw [dif_pos H1], dsimp,
+    rw dif_pos, ext; simp,
+    simp [s.3] },
+  rw [dif_neg H1], dsimp,
+  rw dif_neg, ext; simp,
+  simp [le_of_lt s.3]
+end
+
+@[simp] lemma step.map_inv_map (s : step n) (σ : Sym n) :
+  (s.map σ⁻¹).map σ = s :=
+by simpa using step.map_map_inv s σ⁻¹
+
+def inversion (σ : Sym n) (s : step n) : mu2 :=
+if σ s.1 > σ s.2 then -1 else 1
+
+def inversions (σ : Sym n) : mu2 :=
+finset.prod finset.univ $ inversion σ
+
+theorem inversion_mul (σ τ : Sym n) (s : step n) :
+  inversion (σ * τ) s = inversion σ (s.map τ) * inversion τ s :=
+begin
+  unfold inversion step.map step.mk',
+  split_ifs with h1 h2 h3 h3 h4 h4 h2 h3 h3 h4 h4; try { refl },
+  { exfalso, apply lt_asymm h2 h3 },
+  { exfalso, apply lt_asymm h1 h3 },
+  { simp at *, exfalso,
+    exact ne_of_lt s.3 (τ.bijective.1 $ le_antisymm h4 h2) },
+  { exfalso, apply lt_asymm h2 h3 },
+  { simp at *, exfalso,
+    exact ne_of_lt s.3 (τ.bijective.1 $ le_antisymm h4 h2) },
+  { simp at *, exfalso,
+    exact ne_of_lt s.3 (τ.bijective.1 $ σ.bijective.1 $ le_antisymm h1 h3) }
+end
+
+instance : is_group_hom (@inversions n) :=
+⟨λ σ τ, calc
+      inversions (σ * τ)
+    = finset.prod finset.univ (inversion (σ * τ)) : rfl
+... = finset.prod finset.univ (λ s : step n,
+        inversion σ (s.map τ) * inversion τ s) :
+  congr_arg _ $ funext $ inversion_mul σ τ
+... = finset.prod finset.univ (λ s : step n,
+        inversion σ (s.map τ)) * inversions τ :
+  finset.prod_mul_distrib
+... = finset.prod finset.univ (inversion σ) * inversions τ :
+  congr_arg (λ z, z * inversions τ) $ finset.prod_bij
+    (λ s _, step.map s τ) (λ _ _, finset.mem_univ _) (λ _ _, rfl)
+    (λ s t _ _ H, by simpa using congr_arg (λ z, step.map z τ⁻¹) H)
+    (λ s _, ⟨s.map τ⁻¹, finset.mem_univ _, by simp⟩)⟩
+
+variable (n)
+def step01 : step (n+2) :=
+⟨⟨0, nat.zero_lt_succ _⟩, ⟨1, nat.succ_lt_succ $ nat.zero_lt_succ _⟩, dec_trivial⟩
+variable {n}
+
+theorem inversions_step01 : inversions (step01 n).eval = -1 :=
+show _ = finset.prod {step01 n} (inversion (step01 n).eval), from
+eq.symm $ finset.prod_subset (finset.subset_univ _) $ λ s _ H1, begin
+  unfold inversion step.eval swap step01; dsimp at *, rw if_neg,
+  by_cases H2 : s.1.1 = 0,
+  { rw [if_pos, if_neg, if_neg],
+    { intro H3,
+      replace H3 := nat.le_of_lt_succ H3,
+      replace H3 := nat.eq_zero_of_le_zero H3,
+      exact ne_of_lt s.3 (fin.eq_of_veq $ H2.trans H3.symm) },
+    { intro H3, apply H1, simp, ext, exact fin.eq_of_veq H2, exact H3 },
+    { exact ne_of_gt (H2 ▸ s.3 : s.2.1 > 0), },
+    { exact fin.eq_of_veq H2 } },
+  by_cases H3 : s.1.1 = 1,
+  { rw [if_neg, if_pos], exact nat.not_lt_zero _,
+    exact fin.eq_of_veq H3, exact mt fin.veq_of_eq H2 },
+  rw [if_neg, if_neg, if_neg, if_neg],
+  { exact lt_asymm s.3 },
+  { intro H4, have H5 := s.3, rw H4 at H5,
+    replace H5 := nat.le_of_lt_succ H5,
+    replace H5 := nat.eq_zero_of_le_zero H5,
+    cc },
+  { intro H4, have H5 := s.3, rw H4 at H5,
+    cases H5 },
+  { exact mt fin.veq_of_eq H3 },
+  { exact mt fin.veq_of_eq H2 }
+end
+
+theorem inversions_eq_sgn : ∀ σ : Sym n, inversions σ = sgn σ :=
+nat.cases_on n dec_trivial $ λ n,
+nat.cases_on n dec_trivial $ λ n σ,
+eq_sgn inversions (step01 n) inversions_step01 σ
+
+end inversions
+
 end Sym
 
 variable (n)
