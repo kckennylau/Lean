@@ -69,11 +69,6 @@ well_founded.fix mem_wf
   = ih _ (λ z HL, nested.rec_on z ih) :=
 by unfold nested.rec_on; rw well_founded.fix_eq; simp
 
-@[elab_as_eliminator] protected def rec_on'
-  {C : nested → Sort*} (x : nested) (C0 : C (nest []))
-  (Cc : Π (hd : nested) (tl : list nested), C (nest tl) → C (nest (hd::tl))) : C x :=
-nested.cases_on' x $ λ L, list.rec_on L C0 Cc
-
 instance : decidable_eq nested :=
 λ x, nested.rec_on x $ λ L1,
 list.rec_on L1 (λ _ y, nested.cases_on' y $ λ L2,
