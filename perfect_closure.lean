@@ -17,8 +17,48 @@ begin
   exact or.cases_on (mul_eq_zero.1 H) id ih
 end
 
-class char_p (α : Type u) [has_zero α] [has_one α] [has_add α] (p : ℕ) : Prop :=
-(cast_eq_zero : (p:α) = 0)
+class char_p (α : Type u) [semiring α] (p : ℕ) : Prop :=
+(cast_eq_zero_iff : ∀ x:ℕ, (x:α) = 0 ↔ p ∣ x)
+
+theorem char_p.cast_eq_zero (α : Type u) [semiring α] (p : ℕ) [char_p α p] : (p:α) = 0 :=
+(char_p.cast_eq_zero_iff α p p).2 (dvd_refl p)
+
+theorem char_p.eq (α : Type u) [semiring α] {p q : ℕ} (c1 : char_p α p) (c2 : char_p α q) : p = q :=
+nat.dvd_antisymm
+  ((char_p.cast_eq_zero_iff α p q).1 (char_p.cast_eq_zero _ _))
+  ((char_p.cast_eq_zero_iff α q p).1 (char_p.cast_eq_zero _ _))
+
+instance char_p.of_char_zero (α : Type u) [semiring α] [char_zero α] : char_p α 0 :=
+⟨λ x, by rw [zero_dvd_iff, ← nat.cast_zero, nat.cast_inj]⟩
+
+theorem char_p.exists (α : Type u) [semiring α] : ∃ p, char_p α p :=
+by letI := classical.dec_eq α; exact
+classical.by_cases
+  (assume H : ∀ p:ℕ, (p:α) = 0 → p = 0, ⟨0,
+    ⟨λ x, by rw [zero_dvd_iff]; exact ⟨H x, by rintro rfl; refl⟩⟩⟩)
+  (λ H, ⟨nat.find (classical.not_forall.1 H), ⟨λ x,
+    ⟨λ H1, nat.dvd_of_mod_eq_zero (by_contradiction $ λ H2,
+      nat.find_min (classical.not_forall.1 H)
+        (nat.mod_lt x $ nat.pos_of_ne_zero $ not_of_not_imp $
+          nat.find_spec (classical.not_forall.1 H))
+        (not_imp_of_and_not ⟨by rwa [← nat.mod_add_div x (nat.find (classical.not_forall.1 H)),
+          nat.cast_add, nat.cast_mul, of_not_not (not_not_of_not_imp $ nat.find_spec (classical.not_forall.1 H)),
+          zero_mul, add_zero] at H1, H2⟩)),
+    λ H1, by rw [← nat.mul_div_cancel' H1, nat.cast_mul,
+      of_not_not (not_not_of_not_imp $ nat.find_spec (classical.not_forall.1 H)), zero_mul]⟩⟩⟩)
+
+theorem char_p.exists_unique (α : Type u) [semiring α] : ∃! p, char_p α p :=
+let ⟨c, H⟩ := char_p.exists α in ⟨c, H, λ y H2, char_p.eq α H2 H⟩
+
+noncomputable def ring_char (α : Type u) [semiring α] : ℕ :=
+classical.some (char_p.exists_unique α)
+
+theorem ring_char.spec (α : Type u) [semiring α] : ∀ x:ℕ, (x:α) = 0 ↔ ring_char α ∣ x :=
+by letI := (classical.some_spec (char_p.exists_unique α)).1;
+unfold ring_char; exact char_p.cast_eq_zero_iff α (ring_char α)
+
+theorem ring_char.eq (α : Type u) [semiring α] {p : ℕ} (C : char_p α p) : p = ring_char α :=
+(classical.some_spec (char_p.exists_unique α)).2 p C
 
 theorem add_pow_char (α : Type u) [comm_ring α] {p : ℕ} (hp : nat.prime p)
   [char_p α p] (x y : α) : (x + y)^p = x^p + y^p :=
@@ -52,8 +92,10 @@ theorem nat.iterate_inj {α : Type u} {op : α → α} (Hinj : function.injectiv
 by induction n with n ih; simp only [nat.iterate_zero, nat.iterate_succ'] at H;
 [exact H, exact ih (Hinj H)]
 
-def frobenius (α : Type u) [monoid α] (p : ℕ) (x : α) : α :=
-x^p
+def frobenius (α : Type u) [monoid α] (p : ℕ) (x : α) : α := x^p
+
+class perfect_field (α : Type u) [field α] (p : ℕ) [char_p α p] : Prop :=
+(frobenius_surj : function.surjective (frobenius α p))
 
 theorem frobenius_def (α : Type u) [monoid α] (p : ℕ) (x : α) : frobenius α p x = x ^ p := rfl
 
@@ -246,5 +288,44 @@ instance [discrete_field α] (p : ℕ) [nat.prime p] [char_p α p] : discrete_fi
   inv_zero := congr_arg (quot.mk (r α p)) (by rw [inv_zero]),
   .. (infer_instance : has_inv (perfect_closure α p)),
   .. (infer_instance : comm_ring (perfect_closure α p)) }
+
+theorem frobenius_mk [comm_monoid α] (p : ℕ) (x : ℕ × α) :
+  frobenius (perfect_closure α p) p (quot.mk (r α p) x) = quot.mk _ (x.1, x.2^p) :=
+begin
+  unfold frobenius, cases x with n x, dsimp only,
+  suffices : ∀ p':ℕ, (quot.mk (r α p) (n, x) ^ p' : perfect_closure α p) = quot.mk (r α p) (n, x ^ p'),
+  { apply this },
+  intro p, induction p with p ih,
+  case nat.zero { apply r.sound, rw [nat.iterate₀ (frobenius_one _ _), pow_zero] },
+  case nat.succ {
+    rw [pow_succ, ih],
+    symmetry,
+    apply r.sound,
+    simp only [pow_succ, nat.iterate₂ (frobenius_mul _ _)]
+  }
+end
+
+def frobenius_equiv [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] :
+  perfect_closure α p ≃ perfect_closure α p :=
+{ to_fun := frobenius (perfect_closure α p) p,
+  inv_fun := λ e, quot.lift_on e (λ x, quot.mk (r α p) (x.1 + 1, x.2)) (λ x y H,
+    match x, y, H with
+    | _, _, r.intro _ n x := quot.sound (r.intro _ _ _)
+    end),
+  left_inv := λ e, quot.induction_on e (λ ⟨m, x⟩, by rw frobenius_mk;
+    symmetry; apply quot.sound; apply r.intro),
+  right_inv := λ e, quot.induction_on e (λ ⟨m, x⟩, by rw frobenius_mk;
+    symmetry; apply quot.sound; apply r.intro) }
+
+theorem frobenius_equiv_apply [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] {x : perfect_closure α p} :
+  frobenius_equiv α p x = frobenius _ p x :=
+rfl
+
+theorem nat_cast [comm_ring α] (p : ℕ) [nat.prime p] (x : ℕ) :
+  (↑x : perfect_closure α p) = quot.mk (r α p) (0, ↑x) :=
+_
+
+/-instance [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] : char_p (perfect_closure α p) p :=
+⟨λ x, _⟩-/
 
 end perfect_closure
