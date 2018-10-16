@@ -123,6 +123,10 @@ theorem frobenius_inj (α : Type u) [integral_domain α] (p : ℕ) [nat.prime p]
   (H : frobenius α p x = frobenius α p y) : x = y :=
 by rw ← sub_eq_zero at H ⊢; rw ← frobenius_sub at H; exact pow_eq_zero H
 
+theorem frobenius_nat_cast (α : Type u) [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] (x : ℕ) :
+  frobenius α p x = x :=
+by induction x; simp only [nat.cast_zero, nat.cast_succ, frobenius_zero, frobenius_one, frobenius_add, *]
+
 inductive perfect_closure.r (α : Type u) [monoid α] (p : ℕ) : (ℕ × α) → (ℕ × α) → Prop
 | intro : ∀ n x, perfect_closure.r (n, x) (n+1, frobenius α p x)
 run_cmd tactic.mk_iff_of_inductive_prop `perfect_closure.r `perfect_closure.r_iff
@@ -243,32 +247,42 @@ instance [discrete_field α] (p : ℕ) [nat.prime p] [char_p α p] : has_inv (pe
 | _, _, r.intro _ n x := quot.sound $ by simp only [frobenius]; rw [← inv_pow']; apply r.intro
 end)⟩
 
-theorem eq_iff [integral_domain α] (p : ℕ) [nat.prime p] [char_p α p]
-  (x y : ℕ × α) : quot.mk (r α p) x = quot.mk (r α p) y ↔ 
-    (frobenius α p^[y.1] x.2) = (frobenius α p^[x.1] y.2) :=
+theorem eq_iff' [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p]
+  (x y : ℕ × α) : quot.mk (r α p) x = quot.mk (r α p) y ↔
+    ∃ z, (frobenius α p^[y.1 + z] x.2) = (frobenius α p^[x.1 + z] y.2) :=
 begin
   split,
   { intro H,
     replace H := quot.exact _ H,
     induction H,
     case eqv_gen.rel : x y H
-    { cases H with n x, refl },
+    { cases H with n x, exact ⟨0, rfl⟩ },
     case eqv_gen.refl : H
-    { refl },
+    { exact ⟨0, rfl⟩ },
     case eqv_gen.symm : x y H ih
-    { exact ih.symm },
+    { cases ih with w ih, exact ⟨w, ih.symm⟩ },
     case eqv_gen.trans : x y z H1 H2 ih1 ih2
-    { apply nat.iterate_inj (frobenius_inj α p) y.1,
-      dsimp only,
-      rw [← nat.iterate_add, add_comm, nat.iterate_add, ih1],
+    { cases ih1 with z1 ih1,
+      cases ih2 with z2 ih2,
+      existsi z2+(y.1+z1),
+      rw [← add_assoc, nat.iterate_add, ih1],
       rw [← nat.iterate_add, add_comm, nat.iterate_add, ih2],
-      rw [← nat.iterate_add, ← nat.iterate_add, add_comm] } },
+      rw [← nat.iterate_add],
+      simp only [add_comm, add_left_comm] } },
   intro H,
   cases x with m x,
   cases y with n y,
-  change (frobenius α p^[n] x) = (frobenius α p^[m] y) at H,
-  rw [r.sound α p m n y _ rfl, r.sound α p n m x _ rfl, add_comm, H]
+  cases H with z H, dsimp only at H,
+  rw [r.sound α p (n+z) m x _ rfl, r.sound α p (m+z) n y _ rfl, H],
+  rw [add_assoc, add_comm, add_comm z]
 end
+
+theorem eq_iff [integral_domain α] (p : ℕ) [nat.prime p] [char_p α p]
+  (x y : ℕ × α) : quot.mk (r α p) x = quot.mk (r α p) y ↔
+    (frobenius α p^[y.1] x.2) = (frobenius α p^[x.1] y.2) :=
+(eq_iff' α p x y).trans ⟨λ ⟨z, H⟩, nat.iterate_inj (frobenius_inj α p) z _ _ $
+  by simpa only [add_comm, nat.iterate_add] using H,
+λ H, ⟨0, H⟩⟩
 
 instance [discrete_field α] (p : ℕ) [nat.prime p] [char_p α p] : discrete_field (perfect_closure α p) :=
 { zero_ne_one := λ H, zero_ne_one ((eq_iff _ _ _ _).1 H),
@@ -321,11 +335,35 @@ theorem frobenius_equiv_apply [comm_ring α] (p : ℕ) [nat.prime p] [char_p α 
   frobenius_equiv α p x = frobenius _ p x :=
 rfl
 
-theorem nat_cast [comm_ring α] (p : ℕ) [nat.prime p] (x : ℕ) :
-  (↑x : perfect_closure α p) = quot.mk (r α p) (0, ↑x) :=
-_
+theorem nat_cast [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] (n x : ℕ) :
+  (x : perfect_closure α p) = quot.mk (r α p) (n, x) :=
+begin
+  induction n with n ih,
+  { induction x with x ih, {refl},
+    rw [nat.cast_succ, nat.cast_succ, ih], refl },
+  rw ih, apply quot.sound,
+  conv {congr, skip, skip, rw ← frobenius_nat_cast α p x},
+  apply r.intro
+end
 
-/-instance [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] : char_p (perfect_closure α p) p :=
-⟨λ x, _⟩-/
+theorem int_cast [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] (x : ℤ) :
+  (x : perfect_closure α p) = quot.mk (r α p) (0, x) :=
+by induction x; simp only [int.cast_of_nat, int.cast_neg_succ_of_nat, nat_cast α p 0]; refl
+
+theorem nat_cast_eq_iff [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] (x y : ℕ) :
+  (x : perfect_closure α p) = y ↔ (x : α) = y :=
+begin
+  split; intro H,
+  { rw [nat_cast α p 0, nat_cast α p 0, eq_iff'] at H,
+    cases H with z H,
+    simpa only [zero_add, nat.iterate₀ (frobenius_nat_cast α p _)] using H },
+  rw [nat_cast α p 0, nat_cast α p 0, H]
+end
+
+instance [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] : char_p (perfect_closure α p) p :=
+begin
+  constructor, intro x, rw ← char_p.cast_eq_zero_iff α,
+  rw [← nat.cast_zero, nat_cast_eq_iff, nat.cast_zero]
+end
 
 end perfect_closure
