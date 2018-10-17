@@ -1,6 +1,6 @@
 import data.padics.padic_norm data.nat.binomial
 
-universe u
+universes u v
 
 theorem inv_pow' {α : Type u} [discrete_field α] {x : α} {n : ℕ} : (x⁻¹)^n = (x^n)⁻¹ :=
 decidable.by_cases
@@ -79,13 +79,17 @@ theorem nat.iterate₀ {α : Type u} {op : α → α} {x : α} (H : op x = x) {n
   op^[n] x = x :=
 by induction n; [simp only [nat.iterate_zero], simp only [nat.iterate_succ', H, *]]
 
-theorem nat.iterate₁ {α : Type u} {op op' : α → α} (H : ∀ x, op (op' x) = op' (op x)) {n : ℕ} {x : α} :
-  op^[n] (op' x) = op' (op^[n] x) :=
+theorem nat.iterate₁ {α : Type u} {β : Type v} {op : α → α} {op' : β → β} {op'' : α → β}
+  (H : ∀ x, op' (op'' x) = op'' (op x)) {n : ℕ} {x : α} :
+  op'^[n] (op'' x) = op'' (op^[n] x) :=
 by induction n; [simp only [nat.iterate_zero], simp only [nat.iterate_succ', H, *]]
 
 theorem nat.iterate₂ {α : Type u} {op : α → α} {op' : α → α → α} (H : ∀ x y, op (op' x y) = op' (op x) (op y)) {n : ℕ} {x y : α} :
   op^[n] (op' x y) = op' (op^[n] x) (op^[n] y) :=
 by induction n; [simp only [nat.iterate_zero], simp only [nat.iterate_succ', H, *]]
+
+theorem nat.iterate_cancel {α : Type u} {op op' : α → α} (H : ∀ x, op (op' x) = x) {n : ℕ} {x : α} : op^[n] (op'^[n] x) = x :=
+by induction n; [refl, rwa [nat.iterate_succ, nat.iterate_succ', H]]
 
 theorem nat.iterate_inj {α : Type u} {op : α → α} (Hinj : function.injective op) (n : ℕ) (x y : α)
   (H : (op^[n] x) = (op^[n] y)) : x = y :=
@@ -94,15 +98,17 @@ by induction n with n ih; simp only [nat.iterate_zero, nat.iterate_succ'] at H;
 
 def frobenius (α : Type u) [monoid α] (p : ℕ) (x : α) : α := x^p
 
-class perfect_field (α : Type u) [field α] (p : ℕ) [char_p α p] : Prop :=
-(frobenius_surj : function.surjective (frobenius α p))
-
 theorem frobenius_def (α : Type u) [monoid α] (p : ℕ) (x : α) : frobenius α p x = x ^ p := rfl
 
 theorem frobenius_mul (α : Type u) [comm_monoid α] (p : ℕ) (x y : α) :
   frobenius α p (x * y) = frobenius α p x * frobenius α p y := mul_pow x y p
 theorem frobenius_one (α : Type u) [monoid α] (p : ℕ) :
   frobenius α p 1 = 1 := one_pow _
+
+theorem is_monoid_hom.map_frobenius {α : Type u} {β : Type v} [monoid α] [monoid β] (f : α → β) [is_monoid_hom f]
+  (p : ℕ) (x : α) : f (frobenius α p x) = frobenius β p (f x) :=
+by unfold frobenius; induction p; simp only [pow_zero, pow_succ,
+  is_monoid_hom.map_one f, is_monoid_hom.map_mul f, *]
 
 instance {α : Type u} [comm_ring α] (p : ℕ) [hp : nat.prime p] [char_p α p] : is_ring_hom (frobenius α p) :=
 { map_one := frobenius_one α p,
@@ -127,6 +133,29 @@ theorem frobenius_nat_cast (α : Type u) [comm_ring α] (p : ℕ) [nat.prime p] 
   frobenius α p x = x :=
 by induction x; simp only [nat.cast_zero, nat.cast_succ, frobenius_zero, frobenius_one, frobenius_add, *]
 
+class perfect_field (α : Type u) [field α] (p : ℕ) [char_p α p] : Type u :=
+(pth_root : α → α)
+(frobenius_pth_root : ∀ x, frobenius α p (pth_root x) = x)
+
+theorem frobenius_pth_root (α : Type u) [field α] (p : ℕ) [char_p α p] [perfect_field α p] (x : α) :
+  frobenius α p (perfect_field.pth_root p x) = x :=
+perfect_field.frobenius_pth_root p x
+
+theorem pth_root_frobenius (α : Type u) [field α] (p : ℕ) [nat.prime p] [char_p α p] [perfect_field α p] (x : α) :
+  perfect_field.pth_root p (frobenius α p x) = x :=
+frobenius_inj α p _ _ (by rw frobenius_pth_root)
+
+instance pth_root.is_ring_hom (α : Type u) [field α] (p : ℕ) [nat.prime p] [char_p α p] [perfect_field α p] :
+  is_ring_hom (@perfect_field.pth_root α _ p _ _) :=
+{ map_one := frobenius_inj α p _ _ (by rw [frobenius_pth_root, frobenius_one]),
+  map_mul := λ x y, frobenius_inj α p _ _ (by simp only [frobenius_pth_root, frobenius_mul]),
+  map_add := λ x y, frobenius_inj α p _ _ (by simp only [frobenius_pth_root, frobenius_add]) }
+
+theorem is_ring_hom.pth_root {α : Type u} [field α] (p : ℕ) [nat.prime p] [char_p α p] [perfect_field α p]
+  {β : Type v} [field β] [char_p β p] [perfect_field β p] (f : α → β) [is_ring_hom f] {x : α} :
+  f (perfect_field.pth_root p x) = perfect_field.pth_root p (f x) :=
+frobenius_inj β p _ _ (by rw [← is_monoid_hom.map_frobenius f, frobenius_pth_root, frobenius_pth_root])
+
 inductive perfect_closure.r (α : Type u) [monoid α] (p : ℕ) : (ℕ × α) → (ℕ × α) → Prop
 | intro : ∀ n x, perfect_closure.r (n, x) (n+1, frobenius α p x)
 run_cmd tactic.mk_iff_of_inductive_prop `perfect_closure.r `perfect_closure.r_iff
@@ -137,8 +166,6 @@ quot (perfect_closure.r α p)
 namespace perfect_closure
 
 variables (α : Type u)
-
---set_option profiler true
 
 private lemma mul_aux_left [comm_monoid α] (p : ℕ) (x1 x2 y : ℕ × α) (H : r α p x1 x2) :
   quot.mk (r α p) (x1.1 + y.1, ((frobenius α p)^[y.1] x1.2) * ((frobenius α p)^[x1.1] y.2)) =
@@ -365,5 +392,51 @@ begin
   constructor, intro x, rw ← char_p.cast_eq_zero_iff α,
   rw [← nat.cast_zero, nat_cast_eq_iff, nat.cast_zero]
 end
+
+instance [discrete_field α] (p : ℕ) [nat.prime p] [char_p α p] : perfect_field (perfect_closure α p) p :=
+{ pth_root := (frobenius_equiv α p).symm,
+  frobenius_pth_root := (frobenius_equiv α p).apply_inverse_apply }
+
+def of [monoid α] (p : ℕ) (x : α) : perfect_closure α p :=
+quot.mk _ (0, x)
+
+instance [comm_ring α] (p : ℕ) [nat.prime p] [char_p α p] : is_ring_hom (of α p) :=
+{ map_one := rfl,
+  map_mul := λ x y, rfl,
+  map_add := λ x y, rfl }
+
+theorem eq_pth_root [discrete_field α] (p : ℕ) [nat.prime p] [char_p α p] (m : ℕ) (x : α) :
+  quot.mk (r α p) (m, x) = (perfect_field.pth_root p^[m] (of α p x) : perfect_closure α p) :=
+begin
+  unfold of,
+  induction m with m ih, {refl},
+  rw [nat.iterate_succ', ← ih]; refl
+end
+
+def UMP [discrete_field α] (p : ℕ) [nat.prime p] [char_p α p]
+  (β : Type v) [discrete_field β] [char_p β p] [perfect_field β p] :
+  { f : α → β // is_ring_hom f } ≃ { f : perfect_closure α p → β // is_ring_hom f } :=
+{ to_fun := λ f, ⟨λ e, quot.lift_on e (λ x, perfect_field.pth_root p^[x.1] (f.1 x.2))
+      (λ x y H, match x, y, H with | _, _, r.intro _ n x := by letI := f.2;
+        simp only [is_monoid_hom.map_frobenius f.1, nat.iterate_succ, pth_root_frobenius]
+      end),
+    show f.1 1 = 1, from f.2.1,
+    λ j k, quot.induction_on j $ λ ⟨m, x⟩, quot.induction_on k $ λ ⟨n, y⟩,
+      show (perfect_field.pth_root p^[_] _) = (perfect_field.pth_root p^[_] _) * (perfect_field.pth_root p^[_] _),
+      by letI := f.2; simp only [is_ring_hom.map_mul f.1, (nat.iterate₁ (λ x, (is_monoid_hom.map_frobenius f.1 p x).symm)).symm,
+          @nat.iterate₂ β _ (*) (λ x y, is_ring_hom.map_mul (perfect_field.pth_root p))];
+        rw [nat.iterate_add, nat.iterate_cancel (pth_root_frobenius β p),
+          add_comm, nat.iterate_add, nat.iterate_cancel (pth_root_frobenius β p)],
+    λ j k, quot.induction_on j $ λ ⟨m, x⟩, quot.induction_on k $ λ ⟨n, y⟩,
+      show (perfect_field.pth_root p^[_] _) = (perfect_field.pth_root p^[_] _) + (perfect_field.pth_root p^[_] _),
+      by letI := f.2; simp only [is_ring_hom.map_add f.1, (nat.iterate₁ (λ x, (is_monoid_hom.map_frobenius f.1 p x).symm)).symm,
+          @nat.iterate₂ β _ (+) (λ x y, is_ring_hom.map_add (perfect_field.pth_root p))];
+        rw [nat.iterate_add, nat.iterate_cancel (pth_root_frobenius β p),
+          add_comm m, nat.iterate_add, nat.iterate_cancel (pth_root_frobenius β p)]⟩,
+  inv_fun := λ f, ⟨f.1 ∘ of α p, @@is_ring_hom.comp _ _ _ _ _ _ f.2⟩,
+  left_inv := λ ⟨f, hf⟩, subtype.eq rfl,
+  right_inv := λ ⟨f, hf⟩, subtype.eq $ funext $ λ i, quot.induction_on i $ λ ⟨m, x⟩,
+    show perfect_field.pth_root p^[m] (f _) = f _,
+    by resetI; rw [eq_pth_root, @nat.iterate₁ _ _ _ _ f (λ x:perfect_closure α p, (is_ring_hom.pth_root p f).symm)] }
 
 end perfect_closure
