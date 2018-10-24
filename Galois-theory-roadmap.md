@@ -20,7 +20,7 @@ Let `F` be a subfield of `K` an `S` be a subset of `K`.
 ## Minimal polynomial
 
 8. For `a` in `K` we have a canonical surjection `phi : F[X] -> F[a]`. That the kernel is non-trivial is equivalent to that `a` is a root of some non-zero polynomial, which means that `a` is algebraic.
-9. In that case, `F[a] = F(a)` (use Cayley-Hamilton, or not).
+9. In that case, `F[a] = F(a)` (use Cayley-Hamilton, or not, or finite dimensional integral domain is field (thanks Kevin!)).
 10. If `a` is algebraic, then `ker phi` is a non-zero ideal of `F[X]` (concretely, it is the set of all polynomials that have `a` as a root). Then there is a unique monic polynomial in `ker phi` of the lowest degree, which we call `irr(a,F)`.
 11. An equivalent characterisation of `irr(a,F)` is that it is the unique monic polynomial such that for any polynomial `f` in `F[X]`, `f(a) = 0` iff `irr(a,F) | f`.
 12. `irr(a,F)` is irreducible.
