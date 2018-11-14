@@ -94,8 +94,7 @@ nat.rec_on n rfl (λ n (ih : nat.cast _ = _), show _ + _ = _, by rw ih; refl)
 
 open polynomial
 
-theorem q5 (s : finset ℤ) (hs : s ≠ ∅) : irreducible
-  (s.prod (λ n, X - C n) - 1 : polynomial ℤ) :=
+theorem q5 (s : finset ℤ) (hs : s ≠ ∅) : irreducible (s.prod (λ n, X - C n) - 1 : polynomial ℤ) :=
 begin
   have deg_prod : degree (s.prod (λ n, X - C n)) = card s,
   { simp only [degree_prod, degree_X_sub_C, sum_const,
